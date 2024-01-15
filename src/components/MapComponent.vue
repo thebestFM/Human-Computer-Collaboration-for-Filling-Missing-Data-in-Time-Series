@@ -13,7 +13,7 @@
         <svg v-for="marker in elseMarkers" :key="marker.options.stationId" :id="'elseSvg' + marker.options.stationId" class="elseSvgClass" :style="boxStyle(marker)"></svg>
       </div>
       <div id="chart-container" v-if="state === 3">
-        <div v-for="image in linedImages" :key="image.id" class="chartimg" :style="imageStyle(image)">
+        <div v-for="image in linedImages" :key="image.id" class="chartimg" :style="imageStyle(image)" :id="'chartimg-' + image.id">
           <svg :id="'svg' + image.id"></svg>
         </div>
       </div>
@@ -46,10 +46,16 @@ export default {
         iconUrl: require('@/assets/point3.png'), // 绿色打钩-用于参考点
         iconSize: [50, 50],
       }),
+      point4Icon: L.icon({
+        iconUrl: require('@/assets/point4.png'), // 金色打钩-用于鼠标对应点
+        iconSize: [50, 50],
+      }),
       selectedMarker: null,
       tempArray: [],
       markersInMap:[],
       markersNearby:[],
+      markersTemp:[],
+      markersinfoSatisfied:[],
       airQualityData: [], // 存储全部空气质量数据
       state: 0,
       buttonStyle: {},
@@ -62,6 +68,8 @@ export default {
       savePoints: [],
       svgBoxes: [],
       elseMarkers: [],
+      missingTime: [],
+      weights: [],
       previousButtonStyle: {
         position: 'absolute',
           left: `50%`,
@@ -97,7 +105,9 @@ export default {
     this.markersInMap = []
 
     this.map = L.map('map').setView([lat || 40, lng || 116.18], zoom);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // 'http://map.geoq.cn/ArcGIS/rest/services/ChinaOnlineCommunity/MapServer/tile/{z}/{y}/{x}'
+    // L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap contributors'
     }).addTo(this.map);
@@ -125,13 +135,22 @@ export default {
           complete: results => {
             results.data.forEach(station => {
               if (station.latitude && station.longitude) {
-                  const marker = L.marker([station.latitude, station.longitude], {
-                    icon: this.pointIcon, stationId: station.station_id,
+                  // const marker = L.marker([station.latitude, station.longitude], {
+                  //   icon: this.pointIcon, stationId: station.station_id,
+                  //   })
+                  //   .addTo(this.map)
+                  const marker = L.circleMarker([station.latitude, station.longitude], {
+                      stationId: station.station_id,
+                      weight: 3,
+                      color: "#7E89FE",
+                      fillColor: '#fff',
+                      fillOpacity: 1,
+                      radius: 10
                     })
                     .addTo(this.map)
-                    // .bindPopup(`<b>${station.name_chinese}</b><br>Station ID: ${station.station_id}`);
+                    // .bindPopup(`<b>${station.name_chinese}</b><br>Station Id: ${station.station_id}`);
                   this.markersInMap.push(marker)
-                  // marker.stationId = station.station_id;
+                  marker.stationId = station.station_id;
                   // console.log("station_id", station.station_id); 
               }
             });
@@ -150,27 +169,34 @@ export default {
     },
 
     onMarkerClick(marker) {
-      //this.map.setView(marker.getLatLng(), 11);
+      this.map.setView(marker.getLatLng(), 11);
 
       if (this.selectedMarker && this.selectedMarker !== marker) {
-        //如果之前有选中的marker，恢复为小蓝标
-        this.selectedMarker.setIcon(this.pointIcon);
+        //如果之前有选中的marker则改回图标
+        this.selectedMarker.setStyle({
+          fillColor: "#fff",
+          color: "#7E89FE"
+        })
       }
 
-      //更新当前选中的大紫标
       this.selectedMarker = marker;
-      marker.setIcon(this.point2Icon);
+      this.selectedMarker.stationId = marker.options.stationId;
 
-      this.selectedMarker = marker;
-      this.selectedMarker.stationID = marker.options.stationId;
+      //当前选中的更新图标
+      marker.setStyle({
+        fillColor: "#FCE57D",
+        color: "#FF8066"
+      })
 
       //计算范围 (10 -> 20km)
-      this.calculateNearbyStations(marker, 0.09); // 经纬度差0.09对应约10公里
+      this.calculateNearbyStations(marker, 0.1); // 经纬度差0.09对应约10公里
 
       // 如果找到的点少于2个，扩大到20km
       if (this.markersNearby.length <= 2) {
-        this.calculateNearbyStations(marker, 0.18); // 扩大一倍
+        this.calculateNearbyStations(marker, 0.2);
       }
+
+      console.log("markersNearby: " + this.markersNearby.length);
 
       const recentData = this.findDataForStation(marker.options.stationId);
       
@@ -202,7 +228,7 @@ export default {
     },
 
     findDataForStation(stationId) {
-      // 筛选ID对应的空气质量数据（线性查找太久，本身有序故二分）
+      // 筛选Id对应的空气质量数据（线性查找太久，本身有序故二分）
       const stationIdIndex = this.binarySearch(this.airQualityData, (data) => {
         return stationId.localeCompare(data.station_id);
       });
@@ -229,7 +255,7 @@ export default {
       const specificDate = '2015-01-01';
       const filteredData = matchedData.filter(data => data.time.startsWith(specificDate));
 
-      console.log("filteredData: " + JSON.stringify(this.filteredData, null, 2));
+      // console.log("filteredData: " + JSON.stringify(this.filteredData, null, 2));
       return filteredData;
     },
 
@@ -302,7 +328,7 @@ export default {
         g.append("path")
           .datum(segment)
           .attr("fill", "none")
-          .attr("stroke", "steelblue")
+          .attr("stroke", "#009EFA")
           .attr("stroke-width", 1.5)
           .attr("d", d3.line()
             .x(d => xScale(new Date(d.time)))
@@ -310,8 +336,11 @@ export default {
           );
       });
 
+      this.missingTime = [];
       // 绘制缺失数据的红色虚线矩形框
       this.missingDataIntervals.forEach(interval => {
+        this.missingTime.push(new Date(interval.start), new Date(interval.end));
+
         const startX = xScale(new Date(interval.start));
         const endX = xScale(new Date(interval.end));
         const rectWidth = endX - startX;
@@ -329,23 +358,55 @@ export default {
           .style("fill", "none")
           .style("stroke-dasharray", ("3, 3"));
       });
+      console.log(this.missingTime);
     },
 
     calculateNearbyStations(marker, radius) {
       const latLng = marker.getLatLng();
       const latRange = [latLng.lat - radius, latLng.lat + radius];
-      const lngRange = [latLng.lng - radius * 1.2, latLng.lng + radius * 1.2];
+      const lngRange = [latLng.lng - radius, latLng.lng + radius];
 
+      this.markersTemp = [];
+      this.markersinfoSatisfied = [];
       this.markersNearby = [];
 
       this.map.eachLayer((layer) => {
-        if (layer instanceof L.Marker) {
+        if (layer instanceof L.CircleMarker) {
           const layerLatLng = layer.getLatLng();
           if (layerLatLng.lat >= latRange[0] && layerLatLng.lat <= latRange[1] &&
               layerLatLng.lng >= lngRange[0] && layerLatLng.lng <= lngRange[1]) {
-            this.markersNearby.push(layer);
+            
+            // 计算距离
+            const distance = Math.sqrt(
+              Math.pow(layerLatLng.lat - latLng.lat, 2) + 
+              Math.pow(layerLatLng.lng - latLng.lng, 2)
+            );
+
+            // 计算方向
+            const direction = Math.atan2(layerLatLng.lng - latLng.lng, layerLatLng.lat - latLng.lat) * (180 / Math.PI);
+            const adjustedDirection = (direction + 360) % 360; // 转换为0~360°
+
+            this.markersTemp.push({ circleMarker: layer, distance, direction: adjustedDirection });
           }
         }
+      });
+
+      // 按距离升序排序
+      this.markersTemp.sort((a, b) => a.distance - b.distance);
+
+      // 筛选满足条件的markers
+      this.markersTemp.forEach(markerinfo => {
+        const isSatisfied = this.markersinfoSatisfied.every(m => 
+          Math.abs(m.direction - markerinfo.direction) > 30
+        );
+        if (isSatisfied) {
+          this.markersinfoSatisfied.push(markerinfo);
+        }
+      });
+
+      // 将满足条件的markers push到markersNearby
+      this.markersinfoSatisfied.forEach(m => {
+        this.markersNearby.push(m.circleMarker);
       });
     },
 
@@ -406,7 +467,11 @@ export default {
         this.map.setView(latLng, 11); // 设置地图视图为当前标记的位置，缩放级别为11
 
         // 重置selectedMarker
-        this.selectedMarker.setIcon(this.pointIcon);
+        // this.selectedMarker.setIcon(this.pointIcon);
+        this.selectedMarker.setStyle({
+          fillColor: "#fff",
+          color: "#7E89FE"
+        })
         this.selectedMarker = null;
       }
     },
@@ -429,8 +494,18 @@ export default {
       // 改变参考点的图标
       this.markersInMap.forEach(marker => {
         if (this.markersNearby.includes(marker) && marker !== this.selectedMarker) {
-          marker.setIcon(this.point3Icon);
+          // marker.setIcon(this.point3Icon);
+          marker.setStyle({
+            fillColor: "#FCE57D",
+            color: "#7E89FE"
+          })
         }
+      });
+
+      this.calWeight();
+      
+      this.weights.forEach(weight => {
+        console.log(`MarkerId: ${weight.marker.stationId}, Related Weight: ${weight.relatedWeight}, Related WeightS: ${weight.relatedWeightS}, Distance Weight: ${weight.distanceWeight}, Distance WeightS: ${weight.distanceWeightS}, Composite Weight: ${weight.compWeight}`);
       });
 
       // 点击->选参考点
@@ -445,6 +520,122 @@ export default {
 
       this.elseMarkers.forEach(marker => {
         this.drawSvgRefOR(marker);
+      });
+    },
+
+    fillMissingValues(refData) {
+      for (let i = 0; i < refData.length; i++) {
+        if (refData[i].PM25_Concentration == null || refData[i].PM25_Concentration.length === 0) {
+          let j = i;
+          while (j < refData.length && (refData[j].PM25_Concentration == null || refData[j].PM25_Concentration.length === 0)) {
+            j++;
+          }
+
+          const A = i > 0 ? parseFloat(refData[i - 1].PM25_Concentration) : 0;
+          const B = j < refData.length ? parseFloat(refData[j].PM25_Concentration) : A;
+          const n = j - i;
+
+          for (let k = i; k < j; k++) {
+            refData[k].PM25_Concentration = A + ((k - i + 1) / (n + 1)) * (B - A);
+          }
+
+          i = j - 1;
+        }
+      }
+    },
+
+    calculateCorrelation(selData, refData) {
+      const selMean = selData.reduce((sum, data) => sum + parseFloat(data.PM25_Concentration), 0) / selData.length;
+      const refMean = refData.reduce((sum, data) => sum + parseFloat(data.PM25_Concentration), 0) / refData.length;
+
+      let covariance = 0;
+      let selVariance = 0;
+      let refVariance = 0;
+
+      for (let i = 0; i < selData.length; i++) {
+        const selDiff = parseFloat(selData[i].PM25_Concentration) - selMean;
+        const refDiff = parseFloat(refData[i].PM25_Concentration) - refMean;
+
+        covariance += selDiff * refDiff;
+        selVariance += selDiff * selDiff;
+        refVariance += refDiff * refDiff;
+      }
+
+      const selStdDev = Math.sqrt(selVariance / selData.length);
+      const refStdDev = Math.sqrt(refVariance / refData.length);
+
+      const correlation = covariance / (selStdDev * refStdDev * selData.length);
+      return correlation;
+    },
+
+    calWeight() {
+      this.weights = [];
+
+      // selData的缺失
+      let selData = this.findDataForStation(this.selectedMarker.stationId);
+      // console.log("selData: " + JSON.stringify(selData, null, 2));
+      let missT = [];
+
+      missT = selData.reduce((data, item) => {
+        if (item.PM25_Concentration === 'NULL') {
+          data.push(item.time);
+        }
+        return data;
+      }, []);
+
+      selData = selData.filter(item => item.PM25_Concentration !== 'NULL');
+
+      // console.log("selData: " + JSON.stringify(selData, null, 2));
+
+      let weightTemp = [];
+      this.markersNearby.forEach(marker => {
+        if (marker !== this.selectedMarker) {
+          let refData = this.findDataForStation(marker.stationId);
+          
+          // selData缺失的时间段对应的refData
+          refData = refData.filter(data => !missT.includes(data.time));
+          // console.log("refData: " + JSON.stringify(refData, null, 2));
+
+          // refData的缺失线性插值
+          this.fillMissingValues(refData);
+
+          // 曲线相关权重
+          let relatedWeight = this.calculateCorrelation(selData, refData);
+
+          // 距离权重
+          const latDiff = marker.getLatLng().lat - this.selectedMarker.getLatLng().lat;
+          const lngDiff = marker.getLatLng().lng - this.selectedMarker.getLatLng().lng;
+          const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
+          let distanceWeight = 1 / distance;
+
+          weightTemp.push({ marker: marker, relatedWeight: relatedWeight, distanceWeight: distanceWeight });
+        }
+      });
+
+      let sumR = 0;
+      let sumD = 0;
+
+      // 标准化
+      weightTemp.forEach(item => {
+        sumR += item.relatedWeight;
+        sumD += item.distanceWeight;
+      });
+      weightTemp.forEach(item => {
+        item.relatedWeightS = item.relatedWeight / sumR;
+        item.distanceWeightS = item.distanceWeight / sumD;
+      });
+
+      // 综合权重
+      this.weights = weightTemp.map(item => {
+        let compWeight = 0.5 * item.relatedWeightS + 0.5 * item.distanceWeightS; // 假设两种权重各占一半
+        return {
+          marker: item.marker,
+          relatedWeight: item.relatedWeight,
+          relatedWeightS: item.relatedWeightS,
+          distanceWeight: item.distanceWeight,
+          distanceWeightS: item.distanceWeightS,
+          compWeight: compWeight
+        };
       });
     },
 
@@ -477,7 +668,7 @@ export default {
           .attr('rx', 10)
           .attr('ry', 10)
           .style('fill', 'white')
-          .style('stroke', 'steelblue')
+          .style('stroke', '#4B4453')
           .style('stroke-width', 2);
 
         // 布局和内部
@@ -510,7 +701,7 @@ export default {
         g.append('path')
           .datum(recentData)
           .attr('fill', 'none')
-          .attr('stroke', 'steelblue')
+          .attr('stroke', '#009EFA')
           .attr('stroke-width', 1.5)
           .attr('d', d3.line()
             .x(d => xScale(new Date(d.time)))
@@ -525,28 +716,44 @@ export default {
           const index = this.markersNearby.indexOf(marker);
           if (index > -1) {
             this.markersNearby.splice(index, 1);
+
+            marker.setStyle({
+              fillColor: "#fff",
+              color: "#7E89FE"
+            })
           }
-          marker.setIcon(this.pointIcon);
         } else {
           this.markersNearby.push(marker);
-          marker.setIcon(this.point3Icon);
+
+          marker.setStyle({
+            fillColor: "#FCE57D",
+            color: "#7E89FE"
+          })
         }
 
         this.elseMarkers = this.markersNearby.filter(marker => marker !== this.selectedMarker);
         this.elseMarkers.forEach(marker => {
           this.drawSvgRefOR(marker);
+          this.calWeight();
+        });
+
+        this.weights.forEach(weight => {
+          console.log(`MarkerId: ${weight.marker.stationId}, Related Weight: ${weight.relatedWeight}, Related WeightS: ${weight.relatedWeightS}, Distance Weight: ${weight.distanceWeight}, Distance WeightS: ${weight.distanceWeightS}, Composite Weight: ${weight.compWeight}`);
         });
       }
     },
 
-    //上一步按钮
     previousStep() {
       this.state = 1;
       this.map.setView(this.selectedMarker.getLatLng(), 11);
       //改回参考点的图标
       this.markersInMap.forEach(marker => {
         if (this.markersNearby.includes(marker) && marker !== this.selectedMarker) {
-          marker.setIcon(this.pointIcon);
+          // marker.setIcon(this.pointIcon);
+          marker.setStyle({
+            fillColor: "#fff",
+            color: "#7E89FE"
+          })
         }
       });
 
@@ -564,12 +771,10 @@ export default {
     },
 
     carryOverlayImages() {
-      const screenHeight = window.innerHeight;
       const screenWidth = 400;
-      const imageHeight = screenHeight * 0.2;
+      const imageHeight = 135;
       const imageWidth = screenWidth * 0.95;
-      const margin = screenHeight * 0.005; // 空隙宽度
-      let topOffset = margin;
+      const margin = 3; // 空隙宽度
 
       const sortedMarkers = this.markersNearby.sort((markerA, markerB) => {
         const latA = markerA.getLatLng().lat;
@@ -580,31 +785,32 @@ export default {
       const sortedStationIds = sortedMarkers.map(marker => marker.options.stationId);
 
       this.linedImages = sortedStationIds.map((id, index) => {
-        const imageTop = topOffset + index * (imageHeight + margin); // 每个矩形的上边缘
+        const imageTop = index * (imageHeight + margin); // 每个矩形的上边缘
         return {
           id,
           top: imageTop,
-          left: 0,
+          left: 2,
           width: imageWidth,
           height: imageHeight
         };
       });
 
-      console.log("selectedMarker.stationID: " + this.selectedMarker.stationID);
+      console.log("selectedMarker.stationId: " + this.selectedMarker.stationId);
       console.log("this.selectedMarker: " + this.selectedMarker);
       this.linedImages.forEach(image => {
         // 异步更新后再画
         this.$nextTick(() => {
           const { xScale, yScale, innerHeight } = this.drawSvg('svg' + image.id);
 
-          console.log("image.id: " + image.id);
           // 对选中点
-          if (this.selectedMarker && 'svg' + image.id === 'svg' + this.selectedMarker.stationID) {
-            console.log("it's here!");
+          if (this.selectedMarker && 'svg' + image.id === 'svg' + this.selectedMarker.stationId) {
+            //console.log("Selected M is here!");
             this.drawSelectedSvg('svg' + image.id, xScale, yScale, innerHeight);
           }
+
+          this.setupSvgInteraction(image.id);
         });
-      });  
+      });
     },
 
     drawSvg(svgId) {
@@ -649,7 +855,7 @@ export default {
         g.append('path')
           .datum(segment)
           .attr('fill', 'none')
-          .attr('stroke', 'steelblue')
+          .attr('stroke', '#009EFA')
           .attr('stroke-width', 1.5)
           .attr('d', d3.line()
             .x(d => xScale(new Date(d.time)))
@@ -857,11 +1063,70 @@ export default {
           y: yScale.invert(circle.y)
         }));
       });
+
+      // 鼠标离开事件
+      svg.on("mouseleave", () => {
+        // 获取与 SVG 关联的标记
+        const relatedMarker = this.markersInMap.find(marker => marker.options.stationId === svgId.replace('svg', ''));
+
+        console.log(`SVG Mouseleave on: ${svgId.replace('svg', '')}, Marker found: ${!!relatedMarker}`);
+        // 恢复标记的图标
+        if (relatedMarker) {
+          // relatedMarker.setIcon(this.pointIcon); // 恢复到原始图标
+          relatedMarker.setStyle({
+            fillColor: "#fff",
+            color: "#7E89FE"
+          })
+        }
+
+        // 恢复 SVG 的边框颜色
+        svg.style('border-color', '#007bff'); // 原始颜色
+      });
+    },
+
+    setupSvgInteraction(imageId) {
+      const chartImg = document.getElementById('chartimg-' + imageId);
+      const relatedMarker = this.markersNearby.find(marker => marker.options.stationId === imageId);
+
+      // 为每个 chartImg 设置鼠标事件
+      chartImg.addEventListener("mouseenter", () => {
+        // 更改标记的图标
+        if (relatedMarker) {
+          // relatedMarker.setIcon(this.point4Icon);
+          relatedMarker.setStyle({
+            fillColor: "#FCE57D",
+            color: "#00C9A7"
+          })
+        }
+        // 更改容器的边框颜色
+        chartImg.style.border = '2px solid #00C9A7';
+      });
+
+      chartImg.addEventListener("mouseleave", () => {
+        // 恢复标记的图标
+        if (relatedMarker) {
+          if (relatedMarker === this.selectedMarker) {
+            // relatedMarker.setIcon(this.point2Icon);
+            relatedMarker.setStyle({
+              fillColor: "#FCE57D",
+              color: "#FF8066"
+            })
+          } else {
+            // relatedMarker.setIcon(this.point3Icon);
+            relatedMarker.setStyle({
+              fillColor: "#FCE57D",
+              color: "#7E89FE"
+            })
+          }
+        }
+        // 恢复容器的边框颜色
+        chartImg.style.border = '2px solid #007bff';
+      });
     },
 
     saveChanges() {
       if (this.selectedMarker) {
-        console.log('当前补充数据的监测站id: ', this.selectedMarker.stationID);
+        console.log('当前补充数据的监测站id: ', this.selectedMarker.stationId);
       } else {
         console.log('');
       }
@@ -878,10 +1143,16 @@ export default {
 
       // 重置所有marker图标
       this.markersInMap.forEach(marker => {
-        marker.setIcon(this.pointIcon); // 将所有标记点重置为原始图标
+        // marker.setIcon(this.pointIcon); // 将所有标记点重置为原始图标
+        marker.setStyle({
+          fillColor: "#fff",
+          color: "#7E89FE"
+        })
       });
 
       this.markersNearby = [];
+      this.markersTemp = [];
+      this.markersinfoSatisfied = [];
       this.savePoints = [];
 
       // 点击->选修改点
