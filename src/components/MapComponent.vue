@@ -10,7 +10,7 @@
         <div id="svgSelectedOne"></div>
       </div>
       <div id="chartReference-container" v-if="state === 2">
-        <svg v-for="marker in elseMarkers" :key="marker.options.stationId" :id="'elseSvg' + marker.options.stationId" class="elseSvgClass" :style="boxStyle(marker)"></svg>
+        <svg v-for="marker in elseMarkers" :key="marker.stationId" :id="'elseSvg' + marker.stationId" class="elseSvgClass" :style="boxStyle(marker)"></svg>
       </div>
       <div id="chart-container" v-if="state === 3">
         <div v-for="image in linedImages" :key="image.id" class="chartimg" :style="imageStyle(image)" :id="'chartimg-' + image.id">
@@ -184,7 +184,7 @@ export default {
       }
 
       this.selectedMarker = marker;
-      this.selectedMarker.stationId = marker.options.stationId;
+      this.selectedMarker.stationId = marker.stationId;
 
       //当前选中的更新图标
       marker.setStyle({
@@ -200,9 +200,9 @@ export default {
         this.calculateNearbyStations(marker, 0.2);
       }
 
-      console.log("markersNearby: " + this.markersNearby.length);
+      // console.log("markersNearby: " + this.markersNearby.length);
 
-      const recentData = this.findDataForStation(marker.stationId);
+      const recentData = [...this.findDataForStation(marker.stationId)];
       
       const hasMissingData = recentData.some(data => !this.isValidPM25(data.PM25_Concentration));
 
@@ -476,7 +476,7 @@ export default {
           fillColor: "#fff",
           color: "#7E89FE"
         })
-        this.selectedMarker = null;
+        // this.selectedMarker = null;
       }
     },
 
@@ -589,16 +589,14 @@ export default {
     },
 
     calValuesUsed() {
-      // 初始化 valueUsed 数组
       this.valueUsed = [];
 
-      // 构建快速访问权重的对象
       const weightMap = {};
       this.weights.forEach(weight => {
         weightMap[weight.marker.stationId] = weight.compWeight;
       });
 
-      // 分组 refDataUsed 按时间点
+      // 按time分组refDataUsed
       const groupedByTime = {};
       this.refDataUsed.forEach(data => {
         if (!groupedByTime[data.time]) {
@@ -607,7 +605,7 @@ export default {
         groupedByTime[data.time].push(data);
       });
 
-      // 计算每个时间点的加权值
+      // 计算每个time的加权y
       for (const time in groupedByTime) {
         let weightedSum = 0;
         groupedByTime[time].forEach(data => {
@@ -669,7 +667,7 @@ export default {
       this.weights = [];
 
       // selData的缺失
-      let selData = this.findDataForStation(this.selectedMarker.stationId);
+      let selData = [...this.findDataForStation(this.selectedMarker.stationId)];
       // console.log("selData: " + JSON.stringify(selData, null, 2));
       let missT = [];
 
@@ -688,16 +686,13 @@ export default {
       let keyT = [];
       let y1, y2;
       if (missT.length > 0) {
-        // 获取第一个和最后一个时间点
         let firstTime = missT[0];
         let lastTime = missT[missT.length - 1];
 
-        // 减去1小时
         let firstHour = parseInt(firstTime.substring(11, 13)) - 1;
         firstHour = firstHour < 10 ? '0' + firstHour : firstHour.toString();
         let adjustedFirstTime = firstTime.substring(0, 11) + firstHour + firstTime.substring(13);
 
-        // 加上1小时
         let lastHour = parseInt(lastTime.substring(11, 13)) + 1;
         lastHour = lastHour < 10 ? '0' + lastHour : lastHour.toString();
         let adjustedLastTime = lastTime.substring(0, 11) + lastHour + lastTime.substring(13);
@@ -715,7 +710,7 @@ export default {
       this.refDataUsed = [];
       this.markersNearby.forEach(marker => {
         if (marker !== this.selectedMarker) {
-          let refData = this.findDataForStation(marker.stationId);
+          let refData = this.findDataForStation(marker.stationId).map(item => ({ ...item }));
           
           // selData缺失的时间段对应的refData
           refData = refData.filter(data => !missT.includes(data.time));
@@ -735,7 +730,11 @@ export default {
               console.log("  k: " + k + "  b: " + b);
 
               refData.forEach(data => {
-                data.PM25_Concentration = k * data.PM25_Concentration + b;
+                // if (k * data.PM25_Concentration + b >=0) {
+                  data.PM25_Concentration = k * data.PM25_Concentration + b;
+                // } else {
+                //   data.PM25_Concentration = 0;
+                // }
               });
             }
           } 
@@ -744,7 +743,7 @@ export default {
             this.refDataUsed.push({
               stationId: data.station_id,
               time: data.time,
-              value: parseFloat(data.PM25_Concentration.toFixed(2))
+              value: parseFloat(data.PM25_Concentration)
             });
           }); 
 
@@ -791,7 +790,7 @@ export default {
     refreshSvgRefOR() {
       this.elseMarkers.forEach(marker => {
         const pos = this.map.latLngToContainerPoint(marker.getLatLng());
-        const svgId = 'elseSvg' + marker.options.stationId;
+        const svgId = 'elseSvg' + marker.stationId;
         const svg = d3.select('#' + svgId);
 
         svg.style('left', pos.x - 100 + 'px')
@@ -1181,7 +1180,7 @@ export default {
           const currentPoint = this.filledCircles.find(circle => circle.x === guideLineX);
 
           if (currentPoint) {
-            // 如果是最小的guideLineX，则与开始点相连
+            // 最小的guideLineX与开始点相连
             if (index === 0) {
               g.append('line').classed('guide-line', true)
                 .attr('x1', startX).attr('y1', startY)
@@ -1240,7 +1239,7 @@ export default {
 
       // 为每个 chartImg 设置鼠标事件
       chartImg.addEventListener("mouseenter", () => {
-        // 更改标记的图标
+        // 更改标记图标外圈->绿色
         if (relatedMarker) {
           // relatedMarker.setIcon(this.point4Icon);
           relatedMarker.setStyle({
@@ -1248,7 +1247,7 @@ export default {
             color: "#00C9A7"
           })
         }
-        // 更改容器的边框颜色
+        // 更改容器边框->绿色
         chartImg.style.border = '2px solid #00C9A7';
       });
 
@@ -1288,7 +1287,7 @@ export default {
       if (this.selectedMarker) {
         const latLng = this.selectedMarker.getLatLng();
         this.map.setView(latLng, 11); // 设置地图视图为当前标记的位置，缩放级别为11
-        this.selectedMarker = null;
+        // this.selectedMarker = null;
       }
 
       // 重置所有marker图标
