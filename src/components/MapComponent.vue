@@ -69,6 +69,10 @@ export default {
       svgBoxes: [],
       elseMarkers: [],
       missingTime: [],
+      refDataUsed: [],
+      valueUsed: [],
+      xScale: null,
+      yScale: null,
       weights: [],
       previousButtonStyle: {
         position: 'absolute',
@@ -198,7 +202,7 @@ export default {
 
       console.log("markersNearby: " + this.markersNearby.length);
 
-      const recentData = this.findDataForStation(marker.options.stationId);
+      const recentData = this.findDataForStation(marker.stationId);
       
       const hasMissingData = recentData.some(data => !this.isValidPM25(data.PM25_Concentration));
 
@@ -294,7 +298,7 @@ export default {
         .style('border-radius', '10px')
         .style('opacity','0.9');
       
-      const margin = { top: 10, right: 25, bottom: 20, left: 37 };
+      const margin = { top: 10, right: 20, bottom: 20, left: 35 };
       const innerWidth = svgWidth - margin.left - margin.right;
       const innerHeight = svgHeight - margin.top - margin.bottom;
 
@@ -303,21 +307,21 @@ export default {
         .attr("transform", `translate(${margin.left}, ${margin.top})`);
 
       // 比例尺
-      const xScale = d3.scaleTime()
+      this.xScale = d3.scaleTime()
         .domain(d3.extent(data, d => new Date(d.time)))
         .range([0, innerWidth]);
 
-      const yScale = d3.scaleLinear()
-        .domain([0, Math.ceil((d3.max(data, d => +d.PM25_Concentration) + 30) / 20) * 20]) // 让y轴最大值是20的倍数
+      this.yScale = d3.scaleLinear()
+        .domain([0, Math.ceil((d3.max(data, d => +d.PM25_Concentration) + 50) / 20) * 20]) // 让y轴最大值是20的倍数
         .range([innerHeight, 0]);
 
       // 坐标轴
       g.append("g")
         .attr("transform", `translate(0, ${innerHeight})`)
-        .call(d3.axisBottom(xScale));
+        .call(d3.axisBottom(this.xScale));
 
       g.append("g")
-        .call(d3.axisLeft(yScale).ticks(d3.max(data, d => +d.PM25_Concentration) / 20));
+        .call(d3.axisLeft(this.yScale).ticks(d3.max(data, d => +d.PM25_Concentration) / 20));
 
       // 绘制曲线
       this.missingDataIntervals = [];
@@ -331,8 +335,8 @@ export default {
           .attr("stroke", "#009EFA")
           .attr("stroke-width", 1.5)
           .attr("d", d3.line()
-            .x(d => xScale(new Date(d.time)))
-            .y(d => yScale(+d.PM25_Concentration))
+            .x(d => this.xScale(new Date(d.time)))
+            .y(d => this.yScale(+d.PM25_Concentration))
           );
       });
 
@@ -341,8 +345,8 @@ export default {
       this.missingDataIntervals.forEach(interval => {
         this.missingTime.push(new Date(interval.start), new Date(interval.end));
 
-        const startX = xScale(new Date(interval.start));
-        const endX = xScale(new Date(interval.end));
+        const startX = this.xScale(new Date(interval.start));
+        const endX = this.xScale(new Date(interval.end));
         const rectWidth = endX - startX;
         
         // 调整稍窄
@@ -503,10 +507,13 @@ export default {
       });
 
       this.calWeight();
+      // console.log("refDataUsed: " + JSON.stringify(this.refDataUsed, null, 2));
       
-      this.weights.forEach(weight => {
-        console.log(`MarkerId: ${weight.marker.stationId}, Related Weight: ${weight.relatedWeight}, Related WeightS: ${weight.relatedWeightS}, Distance Weight: ${weight.distanceWeight}, Distance WeightS: ${weight.distanceWeightS}, Composite Weight: ${weight.compWeight}`);
-      });
+      // this.weights.forEach(weight => {
+      //   console.log(`MarkerId: ${weight.marker.stationId}, Related Weight: ${weight.relatedWeight}, Related WeightS: ${weight.relatedWeightS}, Distance Weight: ${weight.distanceWeight}, Distance WeightS: ${weight.distanceWeightS}, Composite Weight: ${weight.compWeight}`);
+      // });
+
+      this.drawCalLine();
 
       // 点击->选参考点
       this.markersInMap.forEach(marker => {
@@ -521,6 +528,96 @@ export default {
       this.elseMarkers.forEach(marker => {
         this.drawSvgRefOR(marker);
       });
+    },
+
+    drawCalLine() {
+      d3.select('#chartSelected-container svg.svgSelectedOne').selectAll('.calLine').remove();
+
+      this.calValuesUsed();
+      // console.log("this.valueUsed: " + JSON.stringify(this.valueUsed, null, 2));
+
+      if (!this.yScale) {
+        console.error("xScale 或 yScale 未设置");
+        return;
+      }
+
+      const svg = d3.select('#chartSelected-container svg.svgSelectedOne');
+      const g = svg.select("g");
+
+      // const xScale = d3.scaleTime()
+      //   .domain(d3.extent(this.valueUsed, d => new Date(d.time)))
+      //   .range([0, 300 - 55]); // 假设 innerWidth 为 300 - (left + right margin)
+
+      // const yScale = d3.scaleLinear()
+      //   .domain([0, Math.ceil((d3.max(this.valueUsed, d => +d.value) + 30) / 20) * 20])
+      //   .range([120 - 30, 0]); // 假设 innerHeight 为 120 - (top + bottom margin)
+
+      // 间断超过1h分段
+      const cutData = (data) => {
+        const segments = [];
+        let segment = [];
+        for (let i = 0; i < data.length - 1; i++) {
+          segment.push(data[i]);
+          const currentTime = new Date(data[i].time);
+          const nextTime = new Date(data[i + 1].time);
+          const timeDiff = (nextTime - currentTime) / 1000 / 60 / 60;
+          if (timeDiff > 1) {
+            segments.push(segment);
+            segment = [];
+          }
+        }
+        segment.push(data[data.length - 1]);
+        segments.push(segment);
+        return segments;
+      };
+      const segments = cutData(this.valueUsed);
+
+      // 分段画
+      segments.forEach(segment => {
+        g.append("path")
+          .datum(segment)
+          .attr("class", "calLine")
+          .attr("fill", "none")
+          .attr("stroke", "#FF6F91")
+          .attr("stroke-width", 1.5)
+          .attr("opacity", 0.9)
+          .attr("d", d3.line()
+            .x(d => this.xScale(new Date(d.time)))
+            .y(d => this.yScale(+d.value.toFixed(2)))
+          );
+      });
+    },
+
+    calValuesUsed() {
+      // 初始化 valueUsed 数组
+      this.valueUsed = [];
+
+      // 构建快速访问权重的对象
+      const weightMap = {};
+      this.weights.forEach(weight => {
+        weightMap[weight.marker.stationId] = weight.compWeight;
+      });
+
+      // 分组 refDataUsed 按时间点
+      const groupedByTime = {};
+      this.refDataUsed.forEach(data => {
+        if (!groupedByTime[data.time]) {
+          groupedByTime[data.time] = [];
+        }
+        groupedByTime[data.time].push(data);
+      });
+
+      // 计算每个时间点的加权值
+      for (const time in groupedByTime) {
+        let weightedSum = 0;
+        groupedByTime[time].forEach(data => {
+          const weight = weightMap[data.stationId];
+          if (weight) {
+            weightedSum += data.value * weight;
+          }
+        });
+        this.valueUsed.push({ time, value: weightedSum });
+      }
     },
 
     fillMissingValues(refData) {
@@ -584,10 +681,38 @@ export default {
       }, []);
 
       selData = selData.filter(item => item.PM25_Concentration !== 'NULL');
+      console.log("selData: " + JSON.stringify(selData, null, 2));
+      console.log("missT: " + missT);
 
-      // console.log("selData: " + JSON.stringify(selData, null, 2));
+      // 缩放处理
+      let keyT = [];
+      let y1, y2;
+      if (missT.length > 0) {
+        // 获取第一个和最后一个时间点
+        let firstTime = missT[0];
+        let lastTime = missT[missT.length - 1];
+
+        // 减去1小时
+        let firstHour = parseInt(firstTime.substring(11, 13)) - 1;
+        firstHour = firstHour < 10 ? '0' + firstHour : firstHour.toString();
+        let adjustedFirstTime = firstTime.substring(0, 11) + firstHour + firstTime.substring(13);
+
+        // 加上1小时
+        let lastHour = parseInt(lastTime.substring(11, 13)) + 1;
+        lastHour = lastHour < 10 ? '0' + lastHour : lastHour.toString();
+        let adjustedLastTime = lastTime.substring(0, 11) + lastHour + lastTime.substring(13);
+
+        keyT.push(adjustedFirstTime, adjustedLastTime);
+      }
+      console.log("keyT: " + keyT);
+
+      if (keyT.length >= 2) {
+        y1 = parseFloat(selData.find(data => data.time === keyT[0]).PM25_Concentration);
+        y2 = parseFloat(selData.find(data => data.time === keyT[1]).PM25_Concentration);
+      }
 
       let weightTemp = [];
+      this.refDataUsed = [];
       this.markersNearby.forEach(marker => {
         if (marker !== this.selectedMarker) {
           let refData = this.findDataForStation(marker.stationId);
@@ -598,6 +723,30 @@ export default {
 
           // refData的缺失线性插值
           this.fillMissingValues(refData);
+
+          // 用keyT线性缩放
+          if (keyT.length >= 2) {
+            let x1 = refData.find(data => data.time === keyT[0])?.PM25_Concentration;
+            let x2 = refData.find(data => data.time === keyT[1])?.PM25_Concentration;
+            console.log("x1: " + x1 + "  x2: " + x2 + "y1: " + y1 + "  y2: " +y2);
+            if (x1 && x2) {
+              let k = (y2 - y1) / (x2 - x1);
+              let b = y1 - k * x1;
+              console.log("  k: " + k + "  b: " + b);
+
+              refData.forEach(data => {
+                data.PM25_Concentration = k * data.PM25_Concentration + b;
+              });
+            }
+          } 
+          // console.log("refData: " + JSON.stringify(refData, null, 2));
+          refData.forEach(data => {
+            this.refDataUsed.push({
+              stationId: data.station_id,
+              time: data.time,
+              value: parseFloat(data.PM25_Concentration.toFixed(2))
+            });
+          }); 
 
           // 曲线相关权重
           let relatedWeight = this.calculateCorrelation(selData, refData);
@@ -668,11 +817,11 @@ export default {
           .attr('rx', 10)
           .attr('ry', 10)
           .style('fill', 'white')
-          .style('stroke', '#4B4453')
+          .style('stroke', '#3596B5')
           .style('stroke-width', 2);
 
         // 布局和内部
-        const margin = { top: 10, right: 20, bottom: 20, left: 40 };
+        const margin = { top: 8, right: 15, bottom: 22, left: 35 };
         const innerWidth = 200 - margin.left - margin.right;
         const innerHeight = 80 - margin.top - margin.bottom;
 
@@ -735,6 +884,7 @@ export default {
         this.elseMarkers.forEach(marker => {
           this.drawSvgRefOR(marker);
           this.calWeight();
+          this.drawCalLine();
         });
 
         this.weights.forEach(weight => {
