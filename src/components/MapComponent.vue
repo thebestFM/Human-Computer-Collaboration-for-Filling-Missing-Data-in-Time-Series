@@ -74,6 +74,8 @@ export default {
       xScale: null,
       yScale: null,
       weights: [],
+      colorSequence: ['#F9B800', '#F7EEAD', '#1E3B7A', '#AED4DD', '#29AFD4', '#A4ABD6', '#F29A76'],
+      nextHue: 0,
       previousButtonStyle: {
         position: 'absolute',
           left: `50%`,
@@ -946,9 +948,30 @@ export default {
 
       console.log("selectedMarker.stationId: " + this.selectedMarker.stationId);
       console.log("this.selectedMarker: " + this.selectedMarker);
-      this.linedImages.forEach(image => {
+      this.linedImages.forEach((image, index) => {
         // 异步更新后再画
         this.$nextTick(() => {
+          const color = index < this.colorSequence.length ? this.colorSequence[index] : this.selHsv();
+
+          // 修改标记点颜色
+          const marker = this.markersNearby.find(m => m.stationId === image.id);
+          if (marker) {
+            if (marker === this.selectedMarker) {
+              marker.setStyle({
+                fillColor: color,
+                color: "#EE781F"
+              });
+            } else {
+              marker.setStyle({
+              fillColor: color,
+              color: "#7E89FE"
+            });
+            }
+          }
+
+          // 绘制圆圈
+          this.drawCirOnSvg(image.id, color);
+
           const { xScale, yScale, innerHeight } = this.drawSvg('svg' + image.id);
 
           // 对选中点
@@ -957,9 +980,38 @@ export default {
             this.drawSelectedSvg('svg' + image.id, xScale, yScale, innerHeight);
           }
 
-          this.setupSvgInteraction(image.id);
+          this.chgColSvg(image.id);
+          this.markersNearby.forEach(marker => {
+            this.ChgColCir(marker);
+          });
         });
       });
+    },
+
+    selHsv() {
+      const hue = this.nextHue;
+      this.nextHue = (this.nextHue + 360 / (this.markersNearby.length - this.colorSequence.length)) % 360;
+      return `hsl(${hue}, 80%, 50%)`;
+    },
+
+    drawCirOnSvg(imageId, color) {
+      const chartImage = document.getElementById('chartimg-' + imageId);
+      if (chartImage) {
+        const canvas = document.createElement('canvas');
+        canvas.width = chartImage.clientWidth;
+        canvas.height = chartImage.clientHeight;
+        chartImage.appendChild(canvas);
+
+        const ctx = canvas.getContext('2d');
+        const radius = 6; // 圆的半径
+        const x = canvas.width - radius - 6; // 圆心 x 坐标，右上角
+        const y = radius + 5; // 圆心 y 坐标，右上角
+
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
     },
 
     drawSvg(svgId) {
@@ -1130,7 +1182,7 @@ export default {
             .attr('width', 60)
             .attr('height', 18)
             .style('fill', 'white')
-            .style('stroke', '#007bff')
+            .style('stroke', '#7E89FE')
             .style('opacity', 0.8);
 
           // 绘制文本
@@ -1223,17 +1275,16 @@ export default {
         if (relatedMarker) {
           // relatedMarker.setIcon(this.pointIcon); // 恢复到原始图标
           relatedMarker.setStyle({
-            fillColor: "#fff",
             color: "#7E89FE"
           })
         }
 
         // 恢复 SVG 的边框颜色
-        svg.style('border-color', '#007bff'); // 原始颜色
+        svg.style('border-color', '#7E89FE'); // 原始颜色
       });
     },
 
-    setupSvgInteraction(imageId) {
+    chgColSvg(imageId) {
       const chartImg = document.getElementById('chartimg-' + imageId);
       const relatedMarker = this.markersNearby.find(marker => marker.options.stationId === imageId);
 
@@ -1243,7 +1294,6 @@ export default {
         if (relatedMarker) {
           // relatedMarker.setIcon(this.point4Icon);
           relatedMarker.setStyle({
-            fillColor: "#FCE57D",
             color: "#00C9A7"
           })
         }
@@ -1257,19 +1307,61 @@ export default {
           if (relatedMarker === this.selectedMarker) {
             // relatedMarker.setIcon(this.point2Icon);
             relatedMarker.setStyle({
-              fillColor: "#FCE57D",
-              color: "#FF8066"
+              color: "#EE781F"
             })
           } else {
             // relatedMarker.setIcon(this.point3Icon);
             relatedMarker.setStyle({
-              fillColor: "#FCE57D",
               color: "#7E89FE"
             })
           }
         }
         // 恢复容器的边框颜色
-        chartImg.style.border = '2px solid #007bff';
+        chartImg.style.border = '2px solid #7E89FE';
+      });
+    },
+
+    ChgColCir(marker) {
+      // 鼠标悬停
+      marker.on('mouseover', () => {
+        marker.setStyle({
+          color: "#00C9A7"
+        });
+        const relatedImage = document.getElementById('chartimg-' + marker.options.stationId);
+        if (relatedImage) {
+          relatedImage.style.border = '4px solid #00C9A7';
+        }
+
+        // 鼠标离开
+        const checkMouseLeave = setInterval(() => {
+          // 不再悬停则恢复
+          if (!marker.isMouseOver) {
+            if (marker === this.selectedMarker) {
+              // relatedMarker.setIcon(this.point2Icon);
+              marker.setStyle({
+                color: "#EE781F"
+              })
+            } else {
+              // relatedMarker.setIcon(this.point3Icon);
+              marker.setStyle({
+                color: "#7E89FE"
+              })
+            }
+            if (relatedImage) {
+              relatedImage.style.border = '2px solid #7E89FE';
+            }
+            clearInterval(checkMouseLeave);
+          }
+        }, 10); // 每10ms检查一次
+      });
+
+      // 鼠标是否在标点上
+      marker.isMouseOver = false;
+      marker.on('mouseover', () => {
+        marker.isMouseOver = true;
+      });
+      marker.on('mouseout', () => {
+        marker.isMouseOver = false;
       });
     },
 
@@ -1293,6 +1385,9 @@ export default {
       // 重置所有marker图标
       this.markersInMap.forEach(marker => {
         // marker.setIcon(this.pointIcon); // 将所有标记点重置为原始图标
+        // 移除悬浮监听器
+        marker.off('mouseover');
+        marker.off('mouseout');
         marker.setStyle({
           fillColor: "#fff",
           color: "#7E89FE"
@@ -1323,7 +1418,7 @@ export default {
         backgroundColor: 'white',
         margin: '5px',
         boxSizing: 'border-box',
-        border: '2px solid #007bff',
+        border: '2px solid #7E89FE',
         borderRadius: '10px',
       };
     },
