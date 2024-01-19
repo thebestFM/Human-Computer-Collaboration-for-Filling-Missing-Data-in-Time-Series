@@ -10,7 +10,10 @@
         <div id="svgSelectedOne"></div>
       </div>
       <div id="chartReference-container" v-if="state === 2">
-        <svg v-for="marker in elseMarkers" :key="marker.stationId" :id="'elseSvg' + marker.stationId" class="elseSvgClass" :style="boxStyle(marker)"></svg>
+        <div v-for="marker in elseMarkers" :key="marker.stationId" class="svg-container">
+          <svg :id="'elseSvg' + marker.stationId" class="elseSvgClass" :style="boxStyle(marker)"></svg>
+          <div :id="'inputContainer' + marker.stationId" class="input-container" :style="inputContainerStyle(marker)"></div>
+        </div>
       </div>
       <div id="chart-container" v-if="state === 3">
         <div v-for="image in linedImages" :key="image.id" class="chartimg" :style="imageStyle(image)" :id="'chartimg-' + image.id">
@@ -74,7 +77,7 @@ export default {
       xScale: null,
       yScale: null,
       weights: [],
-      colorSequence: ['#F9B800', '#F7EEAD', '#1E3B7A', '#AED4DD', '#29AFD4', '#A4ABD6', '#F29A76'],
+      colorSequence: ['#F9B800', '#F7EEAD', '#AED4DD', '#29AFD4', '#1E3B7A', '#A4ABD6', '#F29A76'],
       nextHue: 0,
       previousButtonStyle: {
         position: 'absolute',
@@ -298,6 +301,7 @@ export default {
         .style('background-color', 'white')
         .style('border', '2px solid #007bff')
         .style('border-radius', '10px')
+        .style('z-index','2000')
         .style('opacity','0.9');
       
       const margin = { top: 10, right: 20, bottom: 20, left: 35 };
@@ -509,12 +513,6 @@ export default {
       });
 
       this.calWeight();
-      // console.log("refDataUsed: " + JSON.stringify(this.refDataUsed, null, 2));
-      
-      // this.weights.forEach(weight => {
-      //   console.log(`MarkerId: ${weight.marker.stationId}, Related Weight: ${weight.relatedWeight}, Related WeightS: ${weight.relatedWeightS}, Distance Weight: ${weight.distanceWeight}, Distance WeightS: ${weight.distanceWeightS}, Composite Weight: ${weight.compWeight}`);
-      // });
-
       this.drawCalLine();
 
       // 点击->选参考点
@@ -545,14 +543,6 @@ export default {
 
       const svg = d3.select('#chartSelected-container svg.svgSelectedOne');
       const g = svg.select("g");
-
-      // const xScale = d3.scaleTime()
-      //   .domain(d3.extent(this.valueUsed, d => new Date(d.time)))
-      //   .range([0, 300 - 55]); // 假设 innerWidth 为 300 - (left + right margin)
-
-      // const yScale = d3.scaleLinear()
-      //   .domain([0, Math.ceil((d3.max(this.valueUsed, d => +d.value) + 30) / 20) * 20])
-      //   .range([120 - 30, 0]); // 假设 innerHeight 为 120 - (top + bottom margin)
 
       // 间断超过1h分段
       const cutData = (data) => {
@@ -793,18 +783,27 @@ export default {
       this.elseMarkers.forEach(marker => {
         const pos = this.map.latLngToContainerPoint(marker.getLatLng());
         const svgId = 'elseSvg' + marker.stationId;
+        const containerId = 'inputContainer' + marker.stationId;
+        
         const svg = d3.select('#' + svgId);
 
-        svg.style('left', pos.x - 100 + 'px')
+        svg.style('left', pos.x - 102 + 'px')
           .style('top', pos.y - 80 + 'px');
+
+        // 输入框
+        const inputContainer = document.getElementById(containerId);
+        if (inputContainer) {
+          inputContainer.style.left = pos.x - 100 + 'px';
+          inputContainer.style.top = (pos.y - 80 + 85) + 'px'; // SVG高度 + 间隔
+        }
       });
     },
 
     drawSvgRefOR(marker) {
-      const recentData = this.findDataForStation(marker.options.stationId);
+      const recentData = this.findDataForStation(marker.stationId);
 
       this.$nextTick(() => {
-        const svgId = 'elseSvg' + marker.options.stationId;
+        const svgId = 'elseSvg' + marker.stationId;
         const svg = d3.select('#' + svgId)
           .attr('width', 200)
           .attr('height', 80);
@@ -858,6 +857,136 @@ export default {
             .y(d => yScale(d.PM25_Concentration))
           );
       });
+
+      this.$nextTick(() => {
+        this.drawInputBox(marker);
+      });
+    },
+
+    inputContainerStyle(marker) {
+      const pos = this.map.latLngToContainerPoint(marker.getLatLng());
+      return {
+        position: 'absolute',
+        left: `${pos.x - 98}px`,
+        top: `${pos.y + 5}px`,
+        width: '192px',
+        height: '25px',
+        zIndex: 200,
+        display: 'flex',
+        alignItems: 'center',
+        backgroundColor: 'white',
+        border: '2px solid #3596B5',
+        borderRadius: '10px',
+        opacity: 0.8
+      };
+    },
+
+    drawInputBox(marker) {
+      const containerId = 'inputContainer' + marker.stationId;
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      // 清空容器
+      container.innerHTML = '';
+
+      // 文本“参考权重”
+      const textSpan = document.createElement('span');
+      textSpan.textContent = '参考权重';
+      textSpan.style.fontFamily = '微软雅黑';
+      textSpan.style.fontSize = '14px';
+      textSpan.style.textAlign = 'center';
+      textSpan.style.padding = '10px'
+
+      container.appendChild(textSpan);
+
+      // 竖线
+      const lineDiv = document.createElement('div');
+      lineDiv.style.width = '2px';
+      lineDiv.style.height = '100%';
+      lineDiv.style.backgroundColor = '#3596B5';
+
+      container.appendChild(lineDiv);
+
+      // 输入框
+      const inputElement = document.createElement('input');
+      inputElement.type = 'number';
+      inputElement.style.width = '90px';
+      inputElement.style.height = '14px';
+      inputElement.style.border = 'none';
+      inputElement.style.margin = '0 2px';
+      inputElement.style.padding = '5px';
+      inputElement.style.textAlign = 'center';
+      inputElement.min = '0';
+      inputElement.max = '1';
+      inputElement.step = '0.001';
+
+      // 输入框默认值
+      const weight = this.weights.find(w => w.marker.stationId === marker.stationId);
+      inputElement.value = weight ? parseFloat(weight.compWeight).toFixed(3) : '0.000';
+
+      // 添加键盘事件监听器
+      inputElement.addEventListener('keyup', (event) => {
+        if (event.key === 'Enter') {
+          const inputValue = parseFloat(inputElement.value);
+          if (inputValue >= 0 && inputValue <= 1) {
+            this.updateWeights(marker.stationId, inputValue);
+          } else {
+            alert('输入值必须在0到1之间');
+          }
+        }
+      });
+
+      container.appendChild(textSpan);
+      container.appendChild(lineDiv);
+      container.appendChild(inputElement);
+    },
+
+    updateWeights(stationId, newWeight) {
+      this.weights.forEach(weight => {
+        console.log(`MarkerId: ${weight.marker.stationId},Composite Weight: ${weight.compWeight}`);
+      });
+
+      let originalWeight = 0;
+
+      // 原始权重
+      this.weights.forEach(weight => {
+        if (weight.marker.stationId === stationId) {
+          originalWeight = weight.compWeight;
+          weight.compWeight = newWeight;
+        }
+      });
+
+      // 如果有修改就调整其他权重
+      if (originalWeight !== newWeight) {
+        const scale = (1 - newWeight) / (1 - originalWeight);
+        this.weights.forEach(weight => {
+          if (weight.marker.stationId !== stationId) {
+            weight.compWeight *= scale;
+          }
+        });
+      }
+
+      // 微调确保权重和为1
+      let totalWeight = this.weights.reduce((sum, weight) => sum + weight.compWeight, 0);
+      if (totalWeight !== 1) {
+        const error = 1 - totalWeight;
+        this.weights[0].compWeight += error;
+      }
+
+      this.weights.forEach(weight => {
+        console.log(`MarkerId: ${weight.marker.stationId},Composite Weight: ${weight.compWeight}`);
+      });
+
+      this.$nextTick(() => {
+        this.elseMarkers = this.markersNearby.filter(marker => marker !== this.selectedMarker);
+
+        this.elseMarkers.forEach(marker => {
+          this.drawInputBox(marker);
+        });
+
+        this.drawCalLine();
+      });
+
     },
 
     toggleMarker(marker) {
@@ -883,9 +1012,9 @@ export default {
 
         this.elseMarkers = this.markersNearby.filter(marker => marker !== this.selectedMarker);
         this.elseMarkers.forEach(marker => {
-          this.drawSvgRefOR(marker);
           this.calWeight();
           this.drawCalLine();
+          this.drawSvgRefOR(marker);
         });
 
         this.weights.forEach(weight => {
@@ -933,7 +1062,7 @@ export default {
         return latB - latA; // 按纬度降序排列
       });
 
-      const sortedStationIds = sortedMarkers.map(marker => marker.options.stationId);
+      const sortedStationIds = sortedMarkers.map(marker => marker.stationId);
 
       this.linedImages = sortedStationIds.map((id, index) => {
         const imageTop = index * (imageHeight + margin); // 每个矩形的上边缘
@@ -1268,7 +1397,7 @@ export default {
       // 鼠标离开事件
       svg.on("mouseleave", () => {
         // 获取与 SVG 关联的标记
-        const relatedMarker = this.markersInMap.find(marker => marker.options.stationId === svgId.replace('svg', ''));
+        const relatedMarker = this.markersInMap.find(marker => marker.stationId === svgId.replace('svg', ''));
 
         console.log(`SVG Mouseleave on: ${svgId.replace('svg', '')}, Marker found: ${!!relatedMarker}`);
         // 恢复标记的图标
@@ -1286,7 +1415,7 @@ export default {
 
     chgColSvg(imageId) {
       const chartImg = document.getElementById('chartimg-' + imageId);
-      const relatedMarker = this.markersNearby.find(marker => marker.options.stationId === imageId);
+      const relatedMarker = this.markersNearby.find(marker => marker.stationId === imageId);
 
       // 为每个 chartImg 设置鼠标事件
       chartImg.addEventListener("mouseenter", () => {
@@ -1298,7 +1427,7 @@ export default {
           })
         }
         // 更改容器边框->绿色
-        chartImg.style.border = '2px solid #00C9A7';
+        chartImg.style.border = '3px solid #00C9A7';
       });
 
       chartImg.addEventListener("mouseleave", () => {
@@ -1327,9 +1456,9 @@ export default {
         marker.setStyle({
           color: "#00C9A7"
         });
-        const relatedImage = document.getElementById('chartimg-' + marker.options.stationId);
+        const relatedImage = document.getElementById('chartimg-' + marker.stationId);
         if (relatedImage) {
-          relatedImage.style.border = '4px solid #00C9A7';
+          relatedImage.style.border = '3px solid #00C9A7';
         }
 
         // 鼠标离开
@@ -1431,6 +1560,7 @@ export default {
         top: pos.y - 80 + 'px',
         width: '200px',
         height: '80px',
+        zIndex: 500,
         opacity: 0.8,
       };
     },
