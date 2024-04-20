@@ -367,14 +367,17 @@ export default {
     },
 
     findData(stationId, startTime, endTime, opt) { // 查找数据
-      // opt(option): 1 - 查找缺失待补充数据（训练集&测试集
+      // opt(option): 1 - 查找missing数据，基础曲线
+      //              2 - 查找算法predict数据，绿参考线
+      //              3 - 查找ground数据，橙参考线
+      //              4 - 查找人为填充数据，灰参考线
+
       const start = startTime.replace('T', ' ').substring(0, 19);
       const end = endTime.replace('T', ' ').substring(0, 19);
 
       const result = [];
       let dataToSearch = [];
 
-      // 根据 opt 选择搜索原始数据或预测数据
       if (opt == 1) {
         dataToSearch = this.airQualityData;
       } else if (opt == 2) {
@@ -385,13 +388,12 @@ export default {
         dataToSearch = this.MSData;
       }
 
-      // 开始正序查找
+      // 正序查找
       for (let index = 0; index < dataToSearch.length; index++) {
         const data = dataToSearch[index];
         if (data.time >= start && data.time <= end && data.station_id === stationId) {
           result.push(data);
         }
-        // 一旦时间超过了 endTime，就可以停止搜索
         if (data.time > end) {
           break;
         }
@@ -401,122 +403,22 @@ export default {
     },
 
     drawSvgSelOR(data) {
-      // 清除原来的
+      // 清除原来画的
       d3.select('#chartSelected-container').selectAll('*').remove();
 
-      // 计算SVG位置和尺寸
+      // svg位置和尺寸
       const screenWidth = window.innerWidth;
       const screenHeight = window.innerHeight;
       const svgWidth = 300;
       const svgHeight = 120;
 
-      // 创建SVG元素
+      // 创建svg
       const svg = d3.select('#chartSelected-container').append('svg').classed('svgSelectedOne', true)
         .attr('width', svgWidth)
         .attr('height', svgHeight)
         .attr('style', `position: absolute; left: ${screenWidth / 2 - svgWidth / 2}px; top: ${screenHeight * 0.2}px;`)
         .style('background-color', 'white')
         .style('border', '2px solid #FF8066')
-        .style('border-radius', '4px')
-        .style('z-index','2000')
-        .style('opacity','0.9');
-      
-      const margin = { top: 10, right: 20, bottom: 20, left: 35 };
-      const innerWidth = svgWidth - margin.left - margin.right;
-      const innerHeight = svgHeight - margin.top - margin.bottom;
-
-      // 画布
-      const g = svg.append("g")
-        .attr("transform", `translate(${margin.left}, ${margin.top})`);
-
-      // 比例尺
-      this.xScale = d3.scaleTime()
-        .domain(d3.extent(data, d => new Date(d.time)))
-        .range([0, innerWidth]);
-
-      this.yScale = d3.scaleLinear()
-        .domain([0, Math.ceil((d3.max(data, d => +d.PM25_Concentration) + 50) / 20) * 20]) // 让y轴最大值是20的倍数
-        .range([innerHeight, 0]);
-
-      // 坐标轴
-      g.append("g")
-        .attr("transform", `translate(0, ${innerHeight})`)
-        .call(d3.axisBottom(this.xScale));
-
-      g.append("g")
-        .call(d3.axisLeft(this.yScale).ticks(d3.max(data, d => +d.PM25_Concentration) / 20));
-
-      // 绘制曲线
-      this.missingDataIntervals = [];
-      this.missingY = [];
-      const segments = this.splitDataIntoSegmentsSel(data);
-      //console.log("missingDataIntervals: " + JSON.stringify(this.missingDataIntervals, null, 2));
-      segments.forEach(segment => {
-        if (segment.length === 1) {
-          // 如果数据段只包含一个数据点，绘制一个点
-          const singleDataPoint = segment[0];
-          g.append("circle")
-            .attr("cx", this.xScale(new Date(singleDataPoint.time)))
-            .attr("cy", this.yScale(+singleDataPoint.PM25_Concentration))
-            .attr("r", 1.5) // 点的半径，可以根据需要调整
-            .attr("fill", "#009EFA");
-        } else {
-          // 如果数据段包含多个数据点，绘制线段
-          g.append("path")
-            .datum(segment)
-            .attr("fill", "none")
-            .attr("stroke", "#009EFA")
-            .attr("stroke-width", 1.5)
-            .attr("d", d3.line()
-              .x(d => this.xScale(new Date(d.time)))
-              .y(d => this.yScale(+d.PM25_Concentration))
-            );
-        }
-      });
-
-      this.missingTime = [];
-      // 绘制缺失数据的紫色虚线矩形框
-      this.missingDataIntervals.forEach((interval, index) => {
-        this.missingTime.push(new Date(interval.start), new Date(interval.end));
-
-        // 获取对应的前一个有效数据点的时间
-        const previousValidTime = this.previousOneData[index] ? this.previousOneData[index].time : interval.start;
-        const startX = this.xScale(new Date(previousValidTime)); // 基于前一个有效数据点的时间计算startX
-        const endX = this.xScale(new Date(interval.end));
-        const rectWidth = endX - startX;
-        
-        // 调整稍窄
-        const adjustedWidth = rectWidth > 6 ? rectWidth - 6 : rectWidth;
-        const adjustedStartX = startX + (rectWidth - adjustedWidth) / 2;
-
-        g.append("rect")
-          .attr("x", adjustedStartX)
-          .attr("y", 0)
-          .attr("width", adjustedWidth)
-          .attr("height", innerHeight)
-          .style("stroke", "#7E89FE")
-          .style("fill", "none")
-          .style("stroke-dasharray", ("3, 3"));
-      });
-    },
-
-    drawSvgOn1(data) {
-      // 清除原来的
-      d3.select('#one-image-container').selectAll('*').remove();
-
-      // 计算SVG位置和尺寸
-      const screenWidth = 490;
-      const screenHeight = 200;
-      const svgWidth = 390;
-      const svgHeight = 156;
-      // const buttonleft = 452;
-
-      // 创建SVG元素
-      const svg = d3.select('#one-image-container').append('svg').classed('ImageOn1', true)
-        .attr('width', svgWidth)
-        .attr('height', svgHeight)
-        .attr('style', `position: absolute; left: ${(screenWidth - 76) / 2 - svgWidth / 2}px; top: ${screenHeight * 0.48}px;`)
-        .style('background-color', 'white')
         .style('border-radius', '4px')
         .style('z-index','2000')
         .style('opacity','0.9');
