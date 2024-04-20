@@ -235,7 +235,7 @@ export default {
 
   methods: {
     handleTimeChange() {
-    // 根据不同的 state 执行不同的操作
+    // state对应界面
       switch(this.state) {
         case 1: {
           const recentData = this.findData(this.selectedMarker.stationId, this.startTime, this.endTime, 1);
@@ -716,12 +716,10 @@ export default {
         this.map.setView(latLng, 11); // 设置地图视图为当前标记的位置，缩放级别为11
 
         // 重置selectedMarker
-        // this.selectedMarker.setIcon(this.pointIcon);
         this.selectedMarker.setStyle({
           fillColor: "#fff",
           color: "#7E89FE"
         })
-        // this.selectedMarker = null;
       }
     },
 
@@ -738,25 +736,19 @@ export default {
     nextStep() {  // state1进入state2按钮调用
       this.state = 2;
 
-      // 删预览图
+      // 删state 1固定在屏幕中上方的预览图
       d3.select('#chartSelected-container svg.svgSelectedOne')
         .remove();
-
-      // this.map.setView(this.selectedMarker.getLatLng(), 13);
 
       // 改变参考点的图标
       this.markersInMap.forEach(marker => {
         if (this.markersNearby.includes(marker) && marker !== this.selectedMarker) {
-          // marker.setIcon(this.point3Icon);
           marker.setStyle({
             fillColor: "#FCE57D",
             color: "#7E89FE"
           })
         }
       });
-
-      // this.calWeight();
-      // this.drawCalLine();
 
       // 点击->选参考点
       this.markersInMap.forEach(marker => {
@@ -775,15 +767,6 @@ export default {
         d3.select('#' + svgId).selectAll('rect')
           .style('stroke', '#FF8066');
       });
-
-      // // 移动
-      // nextTick(() => {
-      //   this.show = !this.show;
-      //   const timeSelectorContainer = document.getElementById('time-selector-container');
-      //   if (timeSelectorContainer) {
-      //     timeSelectorContainer.style.bottom = '200px';
-      //   }
-      // });
     },
 
     refreshSvgRefOR() {
@@ -912,7 +895,6 @@ export default {
       //改回参考点的图标
       this.markersInMap.forEach(marker => {
         if (this.markersNearby.includes(marker)) {
-          // marker.setIcon(this.pointIcon);
           marker.setStyle({
             fillColor: "#fff",
             color: "#7E89FE"
@@ -920,7 +902,7 @@ export default {
         }
       });
 
-      // 点击->选修改点
+      // 点击事件改回选修改点
       this.markersInMap.forEach(marker => {
         marker.off('click').on('click', () => {
           this.onMarkerClick(marker);
@@ -1671,12 +1653,10 @@ export default {
           // 不再悬停则恢复
           if (!marker.isMouseOver) {
             if (marker === this.selectedMarker) {
-              // relatedMarker.setIcon(this.point2Icon);
               marker.setStyle({
                 color: "#EE781F"
               })
             } else {
-              // relatedMarker.setIcon(this.point3Icon);
               marker.setStyle({
                 color: "#7E89FE"
               })
