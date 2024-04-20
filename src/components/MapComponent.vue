@@ -2,26 +2,84 @@
   <div id="map-container">
     <div id="map" style="height: 100vh;"></div>
     <div id="overlay-container">
-      <button v-if="state === 1 || state === 4" @click="resetMap" class="map-button" :style="buttonStyle">取消选择</button>
-      <button v-if="state === 1" @click="nextStep" class="map-button" :style="nextButtonStyle">下一步</button>
-      <button v-if="state === 2" id="previousButton" @click="previousStep" class="map-button" :style="previousButtonStyle">上一步</button>
-      <button v-if="state === 2" id="confirmButton" @click="confirmSelection" class="map-button" :style="confirmButtonStyle">确定</button>
-      <div id="chartSelected-container" v-if="state === 1 || state === 2 || state === 4">
+      <div id="time-selector-container">
+        <div style="display: flex; align-items: center; margin-right: 10px;">
+          <button v-if="state === 0 || state === 1 || state === 4" @click="upInfo" class="map-button" style="margin-right: 5px;">
+            <i class="fa-solid fa-angle-up"></i>
+          </button>
+          <button v-if="state === 2" @click="upInfo2" class="map-button" style="margin-right: 5px;">
+            <i class="fa-solid fa-angle-up"></i>
+          </button>
+          <button v-if="state === 3" @click="downInfo" class="map-button" style="margin-right: 5px;">
+            <i class="fa-solid fa-angle-down"></i>
+          </button>
+          <label style="font-family: 'Microsoft YaHei', sans-serif; font-weight: bold; font-size: 14px; color: #eff0fd;">数据时段:</label>
+        </div>
+        <input type="datetime-local" id="start-time" v-model="startTimeForPicker" :min="first" :max="end" style="font-family: 'Microsoft YaHei', sans-serif; font-size: 14px; color: #97A5C0; border: 2px solid #97A5C0;">
+        <label style="font-family: 'Microsoft YaHei', sans-serif; font-weight: bold; font-size: 14px; color: #eff0fd; margin: 0 4px;">--</label>
+        <input type="datetime-local" id="end-time" v-model="endTimeForPicker" :min="first" :max="end" style="font-family: 'Microsoft YaHei', sans-serif; font-size: 14px; color: #97A5C0; border: 2px solid #97A5C0;">
+      </div>
+      <button v-if="state === 1 || state === 4" @click="resetMap" class="map-button" :style="buttonStyle">
+        <i class="fas fa-rotate-left"></i>
+      </button>
+      <button v-if="state === 1" @click="nextStep" class="map-button" :style="nextButtonStyle">
+        <i class="fas fa-play"></i>
+      </button>
+      <button v-if="state === 2" @click="previousStep" class="map-button" :style="previousButtonStyle">
+        <i class="fa-solid fa-angle-left"></i>
+      </button>
+      <button v-if="state === 2" @click="confirmSelection" class="map-button" :style="confirmButtonStyle">
+        <i class="fas fa-play"></i>
+      </button>
+      <!-- <Transition :duration="550" name="moveup">
+        <div v-if="show" class="one-image-container">
+          <button v-if="state === 2" id="previousButton" @click="previousStep" class="on-button" :style="previousButtonStyle">
+            <i class="fa-solid fa-angle-left"></i>
+          </button>
+          <button v-if="state === 2" id="confirmButton" @click="confirmSelection" class="on-button" :style="confirmButtonStyle">
+            <i class="fas fa-play"></i>
+          </button>
+        </div>
+      </Transition> -->
+      <div id="chartSelected-container" v-if="state === 1">
         <div id="svgSelectedOne"></div>
       </div>
       <div id="chartReference-container" v-if="state === 2">
         <div v-for="marker in elseMarkers" :key="marker.stationId" class="svg-container">
           <svg :id="'elseSvg' + marker.stationId" class="elseSvgClass" :style="boxStyle(marker)"></svg>
-          <div :id="'inputContainer' + marker.stationId" class="input-container" :style="inputContainerStyle(marker)"></div>
         </div>
       </div>
-      <div id="chart-container" v-if="state === 3">
+
+      <Transition :duration="550" name="moveup">
+        <div v-if="show" class="chart-container">
+          <div v-for="image in linedImages" :key="image.id" class="chartimg" :style="imageStyle(image)" :id="'chartimg-' + image.id">
+            <svg :id="'svg' + image.id"></svg>
+          </div>
+        </div>
+      </Transition>
+
+      <button v-if="state === 3" @click="saveChanges" class="on-button" :style="saveButtonStyle">
+        <i class="fa-regular fa-floppy-disk"></i>
+      </button>
+      <button v-if="state === 3" @click="backToStart" class="on-button" :style="backButtonStyle">
+        <i class="fas fa-rotate-left"></i>
+      </button>
+      <button v-if="state === 3" @click="showLines" class="on-button" :style="showLinesButtonStyle">
+        <i class="fa-solid fa-eye"></i>
+      </button>
+
+      <!-- <div class="chart-container" v-if="state === 3">
         <div v-for="image in linedImages" :key="image.id" class="chartimg" :style="imageStyle(image)" :id="'chartimg-' + image.id">
           <svg :id="'svg' + image.id"></svg>
         </div>
       </div>
-      <button v-if="state === 3" @click="saveChanges" class="map-button" :style="saveButtonStyle">保存修改</button>
-      <button v-if="state === 3" @click="backToStart" class="map-button" :style="backButtonStyle">重新选点</button>
+      <button v-if="state === 3" @click="saveChanges" class="map-button" :style="saveButtonStyle">
+        <i class="fa-regular fa-floppy-disk"></i>
+      </button>
+      <button v-if="state === 3" @click="backToStart" class="map-button" :style="backButtonStyle">
+        <i class="fas fa-rotate-left"></i>
+      </button> -->
+
     </div>
   </div>
 </template>
@@ -37,34 +95,44 @@ export default {
   data() {
     return {
       map: null,
-      pointIcon: L.icon({
-        iconUrl: require('@/assets/point.png'), // 蓝色
-        iconSize: [40, 40],
-      }),
-      point2Icon: L.icon({
-        iconUrl: require('@/assets/point2.png'), // 紫色-用于修改点
-        iconSize: [50, 50],
-      }),
-      point3Icon: L.icon({
-        iconUrl: require('@/assets/point3.png'), // 绿色打钩-用于参考点
-        iconSize: [50, 50],
-      }),
-      point4Icon: L.icon({
-        iconUrl: require('@/assets/point4.png'), // 金色打钩-用于鼠标对应点
-        iconSize: [50, 50],
-      }),
+      // pointIcon: L.icon({
+      //   iconUrl: require('@/assets/point.png'), // 蓝色
+      //   iconSize: [40, 40],
+      // }),
+      // point2Icon: L.icon({
+      //   iconUrl: require('@/assets/point2.png'), // 紫色-用于修改点
+      //   iconSize: [50, 50],
+      // }),
+      // point3Icon: L.icon({
+      //   iconUrl: require('@/assets/point3.png'), // 绿色打钩-用于参考点
+      //   iconSize: [50, 50],
+      // }),
+      // point4Icon: L.icon({
+      //   iconUrl: require('@/assets/point4.png'), // 金色打钩-用于鼠标对应点
+      //   iconSize: [50, 50],
+      // }),
+      isshowLines: false,
+      show: false,
       selectedMarker: null,
       tempArray: [],
       markersInMap:[],
       markersNearby:[],
       markersTemp:[],
       markersinfoSatisfied:[],
-      airQualityData: [], // 存储全部空气质量数据
+      airQualityData: [], // missing数据
+      predictData:[],
+      realData:[],
+      MSData:[],
+      savedData:[],
+      dateTimes: [],
+      first: '2014-05-01T01:00',
+      end: '2015-04-30T22:00',
+      startTime: '2014-09-04 22:00:00',
+      endTime: '2014-09-07 02:00:00',
       state: 0,
-      buttonStyle: {},
-      nextButtonStyle: {},
       linedImages: [],
       missingDataIntervals:[],
+      previousOneData:[],
       missingY:[],
       containerData: {},
       filledCircles:[],
@@ -77,34 +145,96 @@ export default {
       xScale: null,
       yScale: null,
       weights: [],
-      colorSequence: ['#F9B800', '#F7EEAD', '#AED4DD', '#29AFD4', '#1E3B7A', '#A4ABD6', '#F29A76'],
+      savedCircles: [],
+      colorSequence: ['#F29A76', '#AED4DD', '#29AFD4', '#1E3B7A', '#A4ABD6', '#F9B800'],
       nextHue: 0,
+      buttonStyle: {
+        position: 'absolute',
+        left: `50%`,
+        top: `75%`,
+        transform: 'translate(-50%, -50%)',
+        zIndex: 1000,
+      },
+      nextButtonStyle: {
+        position: 'absolute',
+        left: '50%',
+        top: 'calc(75% + 40px)',
+        transform: 'translate(-50%, -50%)',
+        zIndex: 1000,
+      },
       previousButtonStyle: {
         position: 'absolute',
-          left: `50%`,
-          top: `75%`,
-          transform: 'translate(-50%, -50%)'
+        left: `50%`,
+        top: `75%`,
+        transform: 'translate(-50%, -50%)',
+        zIndex: 1000,
       },
       confirmButtonStyle: {
         position: 'absolute',
-          left: `50%`,
-          top: `calc(75% + 40px)`,
-          transform: 'translate(-50%, -50%)'
+        left: '50%',
+        top: 'calc(75% + 40px)',
+        transform: 'translate(-50%, -50%)',
+        zIndex: 1000,
       },
+      // previousButtonStyle: {
+      //   position: 'absolute',
+      //     left: `452px`,
+      //     top: `calc(50% - 20px)`,
+      //     transform: 'translate(-50%, -50%)'
+      // },
+      // confirmButtonStyle: {
+      //   position: 'absolute',
+      //     left: `452px`,
+      //     top: `calc(50% + 20px)`,
+      //     transform: 'translate(-50%, -50%)'
+      // },
       saveButtonStyle: {
         position: 'absolute',
-        left: '445px',
-        top: 'calc(50% - 20px)',
+        left: `calc(2% + 452px)`,
+        top: `calc(60% - 20px)`,
         transform: 'translate(-50%, -50%)',
+        zIndex: 1000,
       },
       backButtonStyle: {
         position: 'absolute',
-        left: '445px',
-        top: 'calc(50% + 20px)',
+        left: `calc(2% + 452px)`,
+        top: `calc(60% + 20px)`,
         transform: 'translate(-50%, -50%)',
+        zIndex: 1000,
+      },
+      showLinesButtonStyle: {
+        position: 'absolute',
+        left: `calc(2% + 452px)`,
+        top: `calc(60% + 60px)`,
+        transform: 'translate(-50%, -50%)',
+        zIndex: 1000,
       },
     };
   },
+
+  computed: {
+    // startTime
+    startTimeForPicker: {
+      get() {
+        // 'YYYY-MM-DD HH:mm:ss' -> 'YYYY-MM-DDTHH:mm'
+        return this.startTime.replace(' ', 'T').substring(0, this.startTime.length - 3);
+      },
+      set(value) {
+        // 'YYYY-MM-DDTHH:mm' -> 'YYYY-MM-DD HH:mm:ss'
+        this.startTime = value.replace('T', ' ') + ':00';
+      }
+    },
+    // endTime
+    endTimeForPicker: {
+      get() {
+        return this.endTime.replace(' ', 'T').substring(0, this.endTime.length - 3);
+      },
+      set(value) {
+        this.endTime = value.replace('T', ' ') + ':00';
+      }
+    }
+  },
+
   mounted() {
     const urlParams = new URLSearchParams(window.location.search);
     const lat = urlParams.get('lat');
@@ -113,13 +243,22 @@ export default {
 
     this.markersInMap = []
 
-    this.map = L.map('map').setView([lat || 40, lng || 116.18], zoom);
+    this.map = L.map('map', {zoomControl: false}).setView([lat || 40, lng || 116.18], zoom);
     // 'http://map.geoq.cn/ArcGIS/rest/services/ChinaOnlineCommunity/MapServer/tile/{z}/{y}/{x}'
     // L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap contributors'
     }).addTo(this.map);
+
+    // // logo
+    // const logoControl = L.control({position: 'topleft'});
+    // logoControl.onAdd = function() {
+    //   const div = L.DomUtil.create('div', 'logo');
+    //   div.innerHTML = '<img src="' + require('@/assets/logo.png') + '"style="height: 4vh; display: block;">'; // 使用require引入Logo图片
+    //   return div;
+    // };
+    // logoControl.addTo(this.map);
 
     this.loadStations();
 
@@ -134,7 +273,71 @@ export default {
     });
   },
 
+  watch: {
+    // 监听 startTime 的变化
+    startTime: {
+      handler() {
+        this.handleTimeChange();
+        console.log('this.startTime: ', this.startTime);
+        console.log('this.endTime: ', this.endTime);
+      },
+      deep: true,
+    },
+    // 监听 endTime 的变化
+    endTime: {
+      handler() {
+        this.handleTimeChange();
+        console.log('this.startTime: ', this.startTime);
+        console.log('this.endTime: ', this.endTime);
+      },
+      deep: true,
+    },
+  },
+
   methods: {
+    handleTimeChange() {
+    // 根据不同的 state 执行不同的操作
+      switch(this.state) {
+        case 1: {
+          const recentData = this.findData(this.selectedMarker.stationId, this.startTime, this.endTime, 1);
+          console.log('recentData: ', recentData);
+          if (recentData.length > 0) {
+            this.drawSvgSelOR(recentData);
+          }
+          break;
+        }
+        case 2: {
+          this.elseMarkers = this.markersNearby;
+          this.elseMarkers.forEach(marker => {
+            this.drawSvgRefOR(marker);
+          });
+          this.$nextTick(() => {
+            const svgId = 'elseSvg' + this.selectedMarker.stationId;
+            d3.select('#' + svgId).selectAll('rect')
+              .style('stroke', '#FF8066');
+          });
+          break;
+        }
+        case 3: {
+          this.carryOverlayImages();
+          break;
+        }
+        case 4: {
+          const recentData = this.findData(this.selectedMarker.stationId, this.startTime, this.endTime, 1);
+          if (recentData.length > 0) {
+            this.drawSvgSelOR(recentData);
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    },
+
+    formatDateTime(dateTimeStr) {
+      return dateTimeStr.replace('T', ' ') + ':00'; // 将 'T' 替换为一个空格并添加秒
+    },
+
     loadStations() {
       fetch('/Data/station.csv')
       .then(response => response.text())
@@ -144,31 +347,38 @@ export default {
           complete: results => {
             results.data.forEach(station => {
               if (station.latitude && station.longitude) {
-                  // const marker = L.marker([station.latitude, station.longitude], {
-                  //   icon: this.pointIcon, stationId: station.station_id,
-                  //   })
-                  //   .addTo(this.map)
-                  const marker = L.circleMarker([station.latitude, station.longitude], {
-                      stationId: station.station_id,
-                      weight: 3,
-                      color: "#7E89FE",
-                      fillColor: '#fff',
-                      fillOpacity: 1,
-                      radius: 10
-                    })
-                    .addTo(this.map)
-                    // .bindPopup(`<b>${station.name_chinese}</b><br>Station Id: ${station.station_id}`);
-                  this.markersInMap.push(marker)
-                  marker.stationId = station.station_id;
-                  // console.log("station_id", station.station_id); 
+                const marker = L.circleMarker([station.latitude, station.longitude], {
+                  stationId: station.station_id,
+                  weight: 3,
+                  color: "#7E89FE",
+                  fillColor: '#fff',
+                  fillOpacity: 1,
+                  radius: 10
+                }).addTo(this.map);
+
+                // station_id的后两位
+                const stationIdLastTwo = station.station_id.slice(-2);
+
+                marker.bindTooltip(stationIdLastTwo, {
+                  permanent: true,  // 永久显示
+                  direction: 'center', // 在marker的中心显示
+                  className: 'station-id-tooltip'
+                });
+
+                this.markersInMap.push(marker)
+                marker.stationId = station.station_id;
+                // console.log("station_id", station.station_id); 
               }
             });
           }
         });
       });
 
+      console.log("startTime:", this.startTime);
       // 异步加载空气质量数据
-      this.loadAllAirQualityData().then(() => {
+      this.loadAllData().then(() => {
+        console.log(this.airQualityData);
+        console.log(this.predictData);
         this.markersInMap.forEach(marker => {
           marker.on('click', () => {
             this.onMarkerClick(marker); // 点击->选修改点
@@ -190,11 +400,12 @@ export default {
 
       this.selectedMarker = marker;
       this.selectedMarker.stationId = marker.stationId;
+      console.log("qqq:" + this.selectedMarker.stationId);
 
       //当前选中的更新图标
       marker.setStyle({
-        fillColor: "#FCE57D",
-        color: "#FF8066"
+        fillColor: "#FCE57D", // 黄色
+        color: "#F29A76" // 桃色
       })
 
       //计算范围 (10 -> 20km)
@@ -207,9 +418,11 @@ export default {
 
       // console.log("markersNearby: " + this.markersNearby.length);
 
-      const recentData = [...this.findDataForStation(marker.stationId)];
-      
+      const recentData = this.findData(marker.stationId, this.startTime, this.endTime, 1);
+      console.log("ppp11", recentData);
+
       const hasMissingData = recentData.some(data => !this.isValidPM25(data.PM25_Concentration));
+      console.log("ppp22", hasMissingData);
 
       if (hasMissingData) {
         this.state = 1;
@@ -217,72 +430,83 @@ export default {
         this.state = 4; // 禁止下一步
       }
 
-      nextTick(() => { // 保证使用更新后的state
+      nextTick(() => {
         if (recentData.length > 0) {
           this.drawSvgSelOR(recentData);
         }
-        this.buttonStyle = {
-          position: 'absolute',
-          left: `50%`,
-          top: `75%`,
-          transform: 'translate(-50%, -50%)'
-        };
-        this.nextButtonStyle = {
-          position: 'absolute',
-          left: '50%',
-          top: 'calc(75% + 40px)',
-          transform: 'translate(-50%, -50%)',
-        };
       });
     },
 
-    findDataForStation(stationId) {
-      // 筛选Id对应的空气质量数据（线性查找太久，本身有序故二分）
-      const stationIdIndex = this.binarySearch(this.airQualityData, (data) => {
-        return stationId.localeCompare(data.station_id);
-      });
+    findData(stationId, startTime, endTime, opt) {
+      const start = startTime.replace('T', ' ').substring(0, 19);
+      const end = endTime.replace('T', ' ').substring(0, 19);
 
-      if (stationIdIndex === -1) {
-        // 没有找到
-        return [];
+      const result = [];
+      let dataToSearch = [];
+
+      // 根据 opt 选择搜索原始数据或预测数据
+      if (opt == 1) {
+        dataToSearch = this.airQualityData;
+      } else if (opt == 2) {
+        dataToSearch = this.predictData;
+      } else if (opt == 3) {
+        dataToSearch = this.realData;
+      } else if (opt == 4) {
+        dataToSearch = this.MSData;
       }
 
-      // 找到某行id符合，向前找到id对应第一行
-      let firstMatchIndex = stationIdIndex;
-      while (firstMatchIndex > 0 && this.airQualityData[firstMatchIndex - 1].station_id === stationId) {
-        firstMatchIndex--;
+      // 开始正序查找
+      for (let index = 0; index < dataToSearch.length; index++) {
+        const data = dataToSearch[index];
+        if (data.time >= start && data.time <= end && data.station_id === stationId) {
+          result.push(data);
+        }
+        // 一旦时间超过了 endTime，就可以停止搜索
+        if (data.time > end) {
+          break;
+        }
       }
 
-      // 从第一条开始向后存所有本id的数据
-      let matchedData = [];
-      let currentIndex = firstMatchIndex;
-      while (currentIndex < this.airQualityData.length && this.airQualityData[currentIndex].station_id === stationId) {
-        matchedData.push(this.airQualityData[currentIndex]);
-        currentIndex++;
-      }
-
-      const specificDate = '2015-01-01';
-      const filteredData = matchedData.filter(data => data.time.startsWith(specificDate));
-
-      // console.log("filteredData: " + JSON.stringify(this.filteredData, null, 2));
-      return filteredData;
+      return result;
     },
 
-    binarySearch(array, compareFn) {
-      let low = 0, high = array.length - 1;
+    findSavedData(stationId, startTime, endTime) {
+      const start = startTime.replace('T', ' ').substring(0, 19);
+      const end = endTime.replace('T', ' ').substring(0, 19);
 
-      while (low <= high) {
-        const mid = Math.floor((low + high) / 2);
-        const comparison = compareFn(array[mid]);
-        
-        if (comparison === 0) return mid;
-        else if (comparison < 0) high = mid - 1;
-        else low = mid + 1;
+      const result = [];
+
+      // 直接遍历 this.savedData，这里假定 this.savedData 是乱序的
+      for (let index = 0; index < this.savedData.length; index++) {
+        const data = this.savedData[index];
+        if (data.time >= start && data.time <= end && data.station_id === stationId) {
+          result.push(data);
+        }
       }
 
-      return -1; // 没有找到
+      return result;
     },
 
+    // findIndexByTime(targetTime) {
+    //   let low = 0;
+    //   let high = this.dateTimes.length - 1;
+
+    //   while (low <= high) {
+    //     const mid = Math.floor((low + high) / 2);
+    //     const midTime = this.dateTimes[mid];
+
+    //     if (midTime < targetTime) {
+    //       low = mid + 1;
+    //     } else if (midTime > targetTime) {
+    //       high = mid - 1;
+    //     } else {
+    //       return mid; // 找到匹配的时间
+    //     }
+    //   }
+
+    //   return -1; // 没有找到精确匹配的时间
+    // },
+    
     drawSvgSelOR(data) {
       // 清除原来的
       d3.select('#chartSelected-container').selectAll('*').remove();
@@ -299,8 +523,8 @@ export default {
         .attr('height', svgHeight)
         .attr('style', `position: absolute; left: ${screenWidth / 2 - svgWidth / 2}px; top: ${screenHeight * 0.2}px;`)
         .style('background-color', 'white')
-        .style('border', '2px solid #007bff')
-        .style('border-radius', '10px')
+        .style('border', '2px solid #FF8066')
+        .style('border-radius', '4px')
         .style('z-index','2000')
         .style('opacity','0.9');
       
@@ -332,26 +556,39 @@ export default {
       // 绘制曲线
       this.missingDataIntervals = [];
       this.missingY = [];
-      const segments = this.splitDataIntoSegments(data);
+      const segments = this.splitDataIntoSegmentsSel(data);
       //console.log("missingDataIntervals: " + JSON.stringify(this.missingDataIntervals, null, 2));
       segments.forEach(segment => {
-        g.append("path")
-          .datum(segment)
-          .attr("fill", "none")
-          .attr("stroke", "#009EFA")
-          .attr("stroke-width", 1.5)
-          .attr("d", d3.line()
-            .x(d => this.xScale(new Date(d.time)))
-            .y(d => this.yScale(+d.PM25_Concentration))
-          );
+        if (segment.length === 1) {
+          // 如果数据段只包含一个数据点，绘制一个点
+          const singleDataPoint = segment[0];
+          g.append("circle")
+            .attr("cx", this.xScale(new Date(singleDataPoint.time)))
+            .attr("cy", this.yScale(+singleDataPoint.PM25_Concentration))
+            .attr("r", 1.5) // 点的半径，可以根据需要调整
+            .attr("fill", "#009EFA");
+        } else {
+          // 如果数据段包含多个数据点，绘制线段
+          g.append("path")
+            .datum(segment)
+            .attr("fill", "none")
+            .attr("stroke", "#009EFA")
+            .attr("stroke-width", 1.5)
+            .attr("d", d3.line()
+              .x(d => this.xScale(new Date(d.time)))
+              .y(d => this.yScale(+d.PM25_Concentration))
+            );
+        }
       });
 
       this.missingTime = [];
-      // 绘制缺失数据的红色虚线矩形框
-      this.missingDataIntervals.forEach(interval => {
+      // 绘制缺失数据的紫色虚线矩形框
+      this.missingDataIntervals.forEach((interval, index) => {
         this.missingTime.push(new Date(interval.start), new Date(interval.end));
 
-        const startX = this.xScale(new Date(interval.start));
+        // 获取对应的前一个有效数据点的时间
+        const previousValidTime = this.previousOneData[index] ? this.previousOneData[index].time : interval.start;
+        const startX = this.xScale(new Date(previousValidTime)); // 基于前一个有效数据点的时间计算startX
         const endX = this.xScale(new Date(interval.end));
         const rectWidth = endX - startX;
         
@@ -364,7 +601,108 @@ export default {
           .attr("y", 0)
           .attr("width", adjustedWidth)
           .attr("height", innerHeight)
-          .style("stroke", "red")
+          .style("stroke", "#7E89FE")
+          .style("fill", "none")
+          .style("stroke-dasharray", ("3, 3"));
+      });
+      console.log(this.missingTime);
+    },
+
+    drawSvgOn1(data) {
+      // 清除原来的
+      d3.select('#one-image-container').selectAll('*').remove();
+
+      // 计算SVG位置和尺寸
+      const screenWidth = 490;
+      const screenHeight = 200;
+      const svgWidth = 390;
+      const svgHeight = 156;
+      // const buttonleft = 452;
+
+      // 创建SVG元素
+      const svg = d3.select('#one-image-container').append('svg').classed('ImageOn1', true)
+        .attr('width', svgWidth)
+        .attr('height', svgHeight)
+        .attr('style', `position: absolute; left: ${(screenWidth - 76) / 2 - svgWidth / 2}px; top: ${screenHeight * 0.48}px;`)
+        .style('background-color', 'white')
+        .style('border-radius', '4px')
+        .style('z-index','2000')
+        .style('opacity','0.9');
+      
+      const margin = { top: 10, right: 20, bottom: 20, left: 35 };
+      const innerWidth = svgWidth - margin.left - margin.right;
+      const innerHeight = svgHeight - margin.top - margin.bottom;
+
+      // 画布
+      const g = svg.append("g")
+        .attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+      // 比例尺
+      this.xScale = d3.scaleTime()
+        .domain(d3.extent(data, d => new Date(d.time)))
+        .range([0, innerWidth]);
+
+      this.yScale = d3.scaleLinear()
+        .domain([0, Math.ceil((d3.max(data, d => +d.PM25_Concentration) + 50) / 20) * 20]) // 让y轴最大值是20的倍数
+        .range([innerHeight, 0]);
+
+      // 坐标轴
+      g.append("g")
+        .attr("transform", `translate(0, ${innerHeight})`)
+        .call(d3.axisBottom(this.xScale));
+
+      g.append("g")
+        .call(d3.axisLeft(this.yScale).ticks(d3.max(data, d => +d.PM25_Concentration) / 20));
+
+      // 绘制曲线
+      this.missingDataIntervals = [];
+      this.missingY = [];
+      const segments = this.splitDataIntoSegmentsSel(data);
+      //console.log("missingDataIntervals: " + JSON.stringify(this.missingDataIntervals, null, 2));
+      segments.forEach(segment => {
+        if (segment.length === 1) {
+          // 如果数据段只包含一个数据点，绘制一个点
+          const singleDataPoint = segment[0];
+          g.append("circle")
+            .attr("cx", this.xScale(new Date(singleDataPoint.time)))
+            .attr("cy", this.yScale(+singleDataPoint.PM25_Concentration))
+            .attr("r", 1.5) // 点的半径，可以根据需要调整
+            .attr("fill", "#009EFA");
+        } else {
+          // 如果数据段包含多个数据点，绘制线段
+          g.append("path")
+            .datum(segment)
+            .attr("fill", "none")
+            .attr("stroke", "#009EFA")
+            .attr("stroke-width", 1.5)
+            .attr("d", d3.line()
+              .x(d => this.xScale(new Date(d.time)))
+              .y(d => this.yScale(+d.PM25_Concentration))
+            );
+        }
+      });
+
+      this.missingTime = [];
+      // 绘制缺失数据的紫色虚线矩形框
+      this.missingDataIntervals.forEach((interval, index) => {
+        this.missingTime.push(new Date(interval.start), new Date(interval.end));
+
+        // 获取对应的前一个有效数据点的时间
+        const previousValidTime = this.previousOneData[index] ? this.previousOneData[index].time : interval.start;
+        const startX = this.xScale(new Date(previousValidTime)); // 基于前一个有效数据点的时间计算startX
+        const endX = this.xScale(new Date(interval.end));
+        const rectWidth = endX - startX;
+        
+        // 调整稍窄
+        const adjustedWidth = rectWidth > 6 ? rectWidth - 6 : rectWidth;
+        const adjustedStartX = startX + (rectWidth - adjustedWidth) / 2;
+
+        g.append("rect")
+          .attr("x", adjustedStartX)
+          .attr("y", 0)
+          .attr("width", adjustedWidth)
+          .attr("height", innerHeight)
+          .style("stroke", "#7E89FE")
           .style("fill", "none")
           .style("stroke-dasharray", ("3, 3"));
       });
@@ -407,7 +745,7 @@ export default {
       // 筛选满足条件的markers
       this.markersTemp.forEach(markerinfo => {
         const isSatisfied = this.markersinfoSatisfied.every(m => 
-          Math.abs(m.direction - markerinfo.direction) > 30
+          Math.abs(m.direction - markerinfo.direction) > 20 // 20度
         );
         if (isSatisfied) {
           this.markersinfoSatisfied.push(markerinfo);
@@ -420,28 +758,79 @@ export default {
       });
     },
 
-    splitDataIntoSegments(data) {
+    splitDataIntoSegmentsSel(data) {
       let segments = [];
       let currentSegment = [];
-      let lastValidData = null; // 用于记录上一个有效数据点
+      let potentialMissingStart = data[0] ? data[0].time : null; // 初始化可能的缺失开始时间
+      let lastValidData = null; // 用于存储最后一个有效数据点
+      let lastValidPM25 = null; // 存储最后一个有效PM25值
 
-      data.forEach(d => {
+      this.previousOneData = []; // 重置前一个有效数据点的数组
+      this.missingY = []; // 重置missingY数组，用于存储每段缺失数据的PM25范围
+
+      data.forEach((d, index) => {
         if (this.isValidPM25(d.PM25_Concentration)) {
-          if (currentSegment.length === 0 && lastValidData) {
-            // 如果当前段是新的，且存在上一个有效数据点，则记录缺失数据的起始和结束时间
+          if (potentialMissingStart && currentSegment.length === 0 && index > 0) {
+            // 记录每段缺失前一个有效数据
+            this.previousOneData.push(lastValidData);
+
+            // 记录缺失数据的起始和结束时间
             this.missingDataIntervals.push({
-              start: lastValidData.time,
+              start: potentialMissingStart,
               end: d.time
             });
+
+            // 记录每段缺失数据前后有效数据的PM25值
             this.missingY.push({
-              startY: lastValidData.PM25_Concentration,
-              endY: d.PM25_Concentration
+              startY: lastValidPM25,
+              endY: +d.PM25_Concentration
             });
           }
           currentSegment.push(d);
           lastValidData = d; // 更新最后一个有效数据点
+          lastValidPM25 = +d.PM25_Concentration; // 更新最后一个有效PM25值
+          potentialMissingStart = null; // 重置潜在的缺失开始时间
+        } else {
+          if (currentSegment.length > 0) {
+            segments.push(currentSegment); // 结束当前段并开始新的段
+            currentSegment = [];
+          }
+          if (index === 0 || this.isValidPM25(data[index - 1].PM25_Concentration)) {
+            potentialMissingStart = d.time; // 更新潜在的缺失开始时间
+          }
+        }
+      });
+
+      if (currentSegment.length > 0) {
+        segments.push(currentSegment); // 添加最后一个有效的数据段
+      }
+
+      // 如果数据以无效值结束，记录最后一段缺失的前一个有效数据和PM25值
+      if (potentialMissingStart && lastValidData) {
+        this.previousOneData.push(lastValidData);
+        this.missingDataIntervals.push({
+          start: potentialMissingStart,
+          end: data[data.length - 1].time
+        });
+        this.missingY.push({
+          startY: lastValidPM25,
+          endY: null // 如果没有后续有效数据，结束PM25值设为null
+        });
+      }
+
+      return segments;
+    },
+
+    splitDataIntoSegments(data) {
+      let segments = [];
+      let currentSegment = [];
+
+      data.forEach(d => {
+        if (this.isValidPM25(d.PM25_Concentration)) {
+          // 如果当前数据有效，加到当前段
+          currentSegment.push(d);
         } else if (currentSegment.length > 0) {
-          segments.push(currentSegment);
+          segments.push(currentSegment); // 将当前段加到结果数组中
           currentSegment = [];
         }
       });
@@ -454,19 +843,98 @@ export default {
     },
 
     isValidPM25(value) {
-      return value != null && !isNaN(value) && value !== 0;
+      return value !== null && value !== undefined && !isNaN(value);
     },
 
-    loadAllAirQualityData() {
-      return new Promise((resolve) => {
-        Papa.parse('/Data/airquality.csv', {
-          download: true,
-          header: true,
-          complete: (results) => {
-            this.airQualityData = results.data;
-            resolve();
-          }
+    loadAllData() {
+      return Promise.all([this.loadMissingData(), this.loadPredictData(), this.loadRealData(), this.loadSavedData(), this.loadMSData()]);
+    },
+
+    loadRealData() {
+      return d3.text('/Data/pm25_ground.txt').then(text => {
+        const parsedData = d3.dsvFormat(',').parse(text, (d, index, columns) => {
+          const time = d.datetime.replace(/\//g, '-'); // 将日期格式从2014/05/01改为2014-05-01
+          this.dateTimes.push(time); // 存储datetime值
+          return columns.slice(1).map(stationId => ({
+            station_id: stationId,
+            time: time,
+            PM25_Concentration: +d[stationId] || null
+          }));
         });
+
+        this.realData = parsedData.flat().filter(d => d);
+        // console.log("this.realData: ", this.realData);
+      });
+    },
+
+    loadMSData() {
+      return d3.text('/Data/mydata/pm25_missing.txt').then(text => {
+        const parsedData = d3.dsvFormat(',').parse(text, (d, index, columns) => {
+          const time = d.datetime.replace(/\//g, '-'); // 将日期格式从2014/05/01改为2014-05-01
+          this.dateTimes.push(time); // 存储datetime值
+          return columns.slice(1).map(stationId => ({
+            station_id: stationId,
+            time: time,
+            PM25_Concentration: +d[stationId] || null
+          }));
+        });
+
+        this.MSData = parsedData.flat().filter(d => d);
+      });
+    },
+
+    loadSavedData() {
+      return d3.text('/Data/pm25_saved.txt').then(text => {
+        const data = d3.dsvFormat(',').parse(text, d => ({
+          station_id: d.Station,
+          time: d.Time.replace(/\//g, '-'),
+          PM25_Concentration: parseFloat(d.Saved)
+        }));
+
+        const uniqueDataMap = {};
+        // 创建一个键值对，用于存储每个独特的 station_id 和 time 组合的最后一条记录
+        data.forEach(entry => {
+          const key = `${entry.station_id}-${entry.time}`;
+          uniqueDataMap[key] = entry;  // 相同的键将被新值覆盖，只保留最后一个
+        });
+
+        // 将对象转换回数组格式，并赋值给 savedData
+        this.savedData = Object.values(uniqueDataMap);
+        // console.log("this.savedData: ", this.savedData);
+      });
+    },
+
+    loadMissingData() {
+      return d3.text('/Data/pm25_missing.txt').then(text => {
+        const parsedData = d3.dsvFormat(',').parse(text, (d, index, columns) => {
+          const time = d.datetime.replace(/\//g, '-'); // 将日期格式从2014/05/01改为2014-05-01
+          this.dateTimes.push(time); // 存储datetime值
+          return columns.slice(1).map(stationId => ({
+            station_id: stationId,
+            time: time,
+            PM25_Concentration: +d[stationId] || null
+          }));
+        });
+
+        this.airQualityData = parsedData.flat().filter(d => d);
+      });
+    },
+
+    loadPredictData() {
+      return d3.text('/Data/pm25_predict.txt').then(text => {
+        const rows = text.split('\n').filter(d => d); // 分割每一行并过滤掉空行
+        const parsedData = rows.map((row, rowIndex) => {
+          const values = row.split(','); // 根据逗号分割每一列
+          return values.map((value, columnIndex) => {
+            return {
+              station_id: `0010${String(columnIndex + 1).padStart(2, '0')}`, // 生成station_id
+              time: this.dateTimes[rowIndex], // 使用对应的datetime值
+              PM25_Concentration: +value || null
+            };
+          });
+        });
+
+        this.predictData = parsedData.flat().filter(d => d);
       });
     },
 
@@ -486,20 +954,26 @@ export default {
       }
     },
 
+    upInfo() {
+
+    },
+
+    upInfo2() {
+
+    },
+
+    downInfo() {
+
+    },
+
     nextStep() {
       this.state = 2;
 
-      // 修改点的预览图移到左下角
-      const svgTop = window.innerHeight - 135;
+      // 删预览图
       d3.select('#chartSelected-container svg.svgSelectedOne')
-        .style('left', `10px`)
-        .style('top', `${svgTop}px`);
+        .remove();
 
-      // 按钮移到右下角
-      this.previousButtonStyle.left = 'calc(100% - 80px)';
-      this.previousButtonStyle.top = 'calc(100% - 100px)';
-      this.confirmButtonStyle.left = 'calc(100% - 80px)';
-      this.confirmButtonStyle.top = 'calc(100% - 60px)';
+      // this.map.setView(this.selectedMarker.getLatLng(), 13);
 
       // 改变参考点的图标
       this.markersInMap.forEach(marker => {
@@ -512,8 +986,8 @@ export default {
         }
       });
 
-      this.calWeight();
-      this.drawCalLine();
+      // this.calWeight();
+      // this.drawCalLine();
 
       // 点击->选参考点
       this.markersInMap.forEach(marker => {
@@ -523,11 +997,24 @@ export default {
       });
 
       // 处理elseSvg的小图
-      this.elseMarkers = this.markersNearby.filter(marker => marker !== this.selectedMarker);
-
+      this.elseMarkers = this.markersNearby;
       this.elseMarkers.forEach(marker => {
         this.drawSvgRefOR(marker);
       });
+      this.$nextTick(() => {
+        const svgId = 'elseSvg' + this.selectedMarker.stationId;
+        d3.select('#' + svgId).selectAll('rect')
+          .style('stroke', '#FF8066');
+      });
+
+      // // 移动
+      // nextTick(() => {
+      //   this.show = !this.show;
+      //   const timeSelectorContainer = document.getElementById('time-selector-container');
+      //   if (timeSelectorContainer) {
+      //     timeSelectorContainer.style.bottom = '200px';
+      //   }
+      // });
     },
 
     drawCalLine() {
@@ -659,12 +1146,12 @@ export default {
       this.weights = [];
 
       // selData的缺失
-      let selData = [...this.findDataForStation(this.selectedMarker.stationId)];
-      // console.log("selData: " + JSON.stringify(selData, null, 2));
+      let selData = [...this.findData(this.selectedMarker.stationId, this.startTime, this.endTime, 1)];
+      console.log("selData0: " + JSON.stringify(selData, null, 2));
       let missT = [];
 
       missT = selData.reduce((data, item) => {
-        if (item.PM25_Concentration === 'NULL') {
+        if (item.PM25_Concentration === null) {
           data.push(item.time);
         }
         return data;
@@ -702,7 +1189,7 @@ export default {
       this.refDataUsed = [];
       this.markersNearby.forEach(marker => {
         if (marker !== this.selectedMarker) {
-          let refData = this.findDataForStation(marker.stationId).map(item => ({ ...item }));
+          let refData = this.findData(marker.stationId, this.startTime, this.endTime, 1).map(item => ({ ...item }));
           
           // selData缺失的时间段对应的refData
           refData = refData.filter(data => !missT.includes(data.time));
@@ -730,7 +1217,7 @@ export default {
               });
             }
           } 
-          // console.log("refData: " + JSON.stringify(refData, null, 2));
+          console.log("refData: " + JSON.stringify(refData, null, 2));
           refData.forEach(data => {
             this.refDataUsed.push({
               stationId: data.station_id,
@@ -777,30 +1264,33 @@ export default {
           compWeight: compWeight
         };
       });
+
+      console.log("compWeight", this.weights.compWeight);
     },
 
     refreshSvgRefOR() {
       this.elseMarkers.forEach(marker => {
         const pos = this.map.latLngToContainerPoint(marker.getLatLng());
         const svgId = 'elseSvg' + marker.stationId;
-        const containerId = 'inputContainer' + marker.stationId;
+        // const containerId = 'inputContainer' + marker.stationId;
         
         const svg = d3.select('#' + svgId);
 
         svg.style('left', pos.x - 102 + 'px')
-          .style('top', pos.y - 80 + 'px');
+          .style('top', pos.y - 94 + 'px');
 
         // 输入框
-        const inputContainer = document.getElementById(containerId);
-        if (inputContainer) {
-          inputContainer.style.left = pos.x - 100 + 'px';
-          inputContainer.style.top = (pos.y - 80 + 85) + 'px'; // SVG高度 + 间隔
-        }
+        // const inputContainer = document.getElementById(containerId);
+        // if (inputContainer) {
+        //   inputContainer.style.left = pos.x - 100 + 'px';
+        //   inputContainer.style.top = (pos.y - 80 + 85) + 'px'; // SVG高度 + 间隔
+        // }
       });
     },
 
     drawSvgRefOR(marker) {
-      const recentData = this.findDataForStation(marker.stationId);
+      const recentData = this.findData(marker.stationId, this.startTime, this.endTime, 1);
+      // console.log("recentDataHere:", recentData);
 
       this.$nextTick(() => {
         const svgId = 'elseSvg' + marker.stationId;
@@ -813,15 +1303,15 @@ export default {
           .attr('x', 2)
           .attr('y', 2)
           .attr('width', 196)
-          .attr('height', 76)
-          .attr('rx', 10)
-          .attr('ry', 10)
+          .attr('height', 86)
+          .attr('rx', 3)
+          .attr('ry', 3)
           .style('fill', 'white')
-          .style('stroke', '#3596B5')
-          .style('stroke-width', 2);
+          .style('stroke', '#7E89FE')
+          .style('stroke-width', 1.5);
 
         // 布局和内部
-        const margin = { top: 8, right: 15, bottom: 22, left: 35 };
+        const margin = { top: 10, right: 15, bottom: 14, left: 35 };
         const innerWidth = 200 - margin.left - margin.right;
         const innerHeight = 80 - margin.top - margin.bottom;
 
@@ -835,7 +1325,7 @@ export default {
           .range([0, innerWidth]);
 
         const yScale = d3.scaleLinear()
-          .domain([0, Math.ceil((d3.max(recentData, d => +d.PM25_Concentration) + 10) / 20) * 20])
+          .domain([0, d3.max(recentData, d => d.PM25_Concentration) + 10])
           .range([innerHeight, 0]);
 
         // 坐标轴
@@ -847,147 +1337,153 @@ export default {
           .call(d3.axisLeft(yScale).ticks(d3.max(recentData, d => +d.PM25_Concentration) / 50));
 
         // 绘制曲线
-        g.append('path')
-          .datum(recentData)
-          .attr('fill', 'none')
-          .attr('stroke', '#009EFA')
-          .attr('stroke-width', 1.5)
-          .attr('d', d3.line()
-            .x(d => xScale(new Date(d.time)))
-            .y(d => yScale(d.PM25_Concentration))
-          );
-      });
+        // g.append('path')
+        //   .datum(recentData)
+        //   .attr('fill', 'none')
+        //   .attr('stroke', '#009EFA')
+        //   .attr('stroke-width', 1.5)
+        //   .attr('d', d3.line()
+        //     .x(d => xScale(new Date(d.time)))
+        //     .y(d => yScale(d.PM25_Concentration))
+        //   );
 
-      this.$nextTick(() => {
-        this.drawInputBox(marker);
-      });
-    },
+        const segments = this.splitDataIntoSegments(recentData);
 
-    inputContainerStyle(marker) {
-      const pos = this.map.latLngToContainerPoint(marker.getLatLng());
-      return {
-        position: 'absolute',
-        left: `${pos.x - 98}px`,
-        top: `${pos.y + 5}px`,
-        width: '192px',
-        height: '25px',
-        zIndex: 200,
-        display: 'flex',
-        alignItems: 'center',
-        backgroundColor: 'white',
-        border: '2px solid #3596B5',
-        borderRadius: '10px',
-        opacity: 0.8
-      };
-    },
-
-    drawInputBox(marker) {
-      const containerId = 'inputContainer' + marker.stationId;
-      const container = document.getElementById(containerId);
-      if (!container) return;
-
-      // 清空容器
-      container.innerHTML = '';
-
-      // 文本“参考权重”
-      const textSpan = document.createElement('span');
-      textSpan.textContent = '参考权重';
-      textSpan.style.fontFamily = '微软雅黑';
-      textSpan.style.fontSize = '14px';
-      textSpan.style.textAlign = 'center';
-      textSpan.style.padding = '10px'
-
-      container.appendChild(textSpan);
-
-      // 竖线
-      const lineDiv = document.createElement('div');
-      lineDiv.style.width = '2px';
-      lineDiv.style.height = '100%';
-      lineDiv.style.backgroundColor = '#3596B5';
-
-      container.appendChild(lineDiv);
-
-      // 输入框
-      const inputElement = document.createElement('input');
-      inputElement.type = 'number';
-      inputElement.style.width = '90px';
-      inputElement.style.height = '14px';
-      inputElement.style.border = 'none';
-      inputElement.style.margin = '0 2px';
-      inputElement.style.padding = '5px';
-      inputElement.style.textAlign = 'center';
-      inputElement.min = '0';
-      inputElement.max = '1';
-      inputElement.step = '0.001';
-
-      // 输入框默认值
-      const weight = this.weights.find(w => w.marker.stationId === marker.stationId);
-      inputElement.value = weight ? parseFloat(weight.compWeight).toFixed(3) : '0.000';
-
-      // 添加键盘事件监听器
-      inputElement.addEventListener('keyup', (event) => {
-        if (event.key === 'Enter') {
-          const inputValue = parseFloat(inputElement.value);
-          if (inputValue >= 0 && inputValue <= 1) {
-            this.updateWeights(marker.stationId, inputValue);
+        segments.forEach(segment => {
+          if (segment.length === 1) {
+            // 如果数据段只包含一个数据点，绘制一个点
+            const point = segment[0];
+            g.append("circle")
+              .attr("cx", xScale(new Date(point.time)))
+              .attr("cy", yScale(point.PM25_Concentration))
+              .attr("r", 1.5) // 设置点的半径
+              .attr("fill", "#009EFA");
           } else {
-            alert('输入值必须在0到1之间');
-          }
-        }
-      });
-
-      container.appendChild(textSpan);
-      container.appendChild(lineDiv);
-      container.appendChild(inputElement);
-    },
-
-    updateWeights(stationId, newWeight) {
-      this.weights.forEach(weight => {
-        console.log(`MarkerId: ${weight.marker.stationId},Composite Weight: ${weight.compWeight}`);
-      });
-
-      let originalWeight = 0;
-
-      // 原始权重
-      this.weights.forEach(weight => {
-        if (weight.marker.stationId === stationId) {
-          originalWeight = weight.compWeight;
-          weight.compWeight = newWeight;
-        }
-      });
-
-      // 如果有修改就调整其他权重
-      if (originalWeight !== newWeight) {
-        const scale = (1 - newWeight) / (1 - originalWeight);
-        this.weights.forEach(weight => {
-          if (weight.marker.stationId !== stationId) {
-            weight.compWeight *= scale;
+            // 如果数据段包含多个数据点，绘制线段
+            g.append("path")
+              .datum(segment)
+              .attr("fill", "none")
+              .attr("stroke", "#009EFA")
+              .attr("stroke-width", 1.5)
+              .attr("d", d3.line()
+                .x(d => xScale(new Date(d.time)))
+                .y(d => yScale(d.PM25_Concentration)));
           }
         });
-      }
-
-      // 微调确保权重和为1
-      let totalWeight = this.weights.reduce((sum, weight) => sum + weight.compWeight, 0);
-      if (totalWeight !== 1) {
-        const error = 1 - totalWeight;
-        this.weights[0].compWeight += error;
-      }
-
-      this.weights.forEach(weight => {
-        console.log(`MarkerId: ${weight.marker.stationId},Composite Weight: ${weight.compWeight}`);
       });
 
-      this.$nextTick(() => {
-        this.elseMarkers = this.markersNearby.filter(marker => marker !== this.selectedMarker);
-
-        this.elseMarkers.forEach(marker => {
-          this.drawInputBox(marker);
-        });
-
-        this.drawCalLine();
-      });
-
+      // this.$nextTick(() => {
+      //   this.drawInputBox(marker);
+      // });
     },
+
+    // drawInputBox(marker) { // 跟updateWeights方法互相嵌套了，放出来的话要检查
+    //   const containerId = 'inputContainer' + marker.stationId;
+    //   const container = document.getElementById(containerId);
+    //   if (!container) return;
+
+    //   // 清空容器
+    //   container.innerHTML = '';
+
+    //   // 文本“参考权重”
+    //   const textSpan = document.createElement('span');
+    //   textSpan.textContent = '参考权重';
+    //   textSpan.style.fontFamily = '微软雅黑';
+    //   textSpan.style.fontSize = '14px';
+    //   textSpan.style.textAlign = 'center';
+    //   textSpan.style.padding = '10px'
+
+    //   container.appendChild(textSpan);
+
+    //   // 竖线
+    //   const lineDiv = document.createElement('div');
+    //   lineDiv.style.width = '2px';
+    //   lineDiv.style.height = '100%';
+    //   lineDiv.style.backgroundColor = '#3596B5';
+
+    //   container.appendChild(lineDiv);
+
+    //   // 输入框
+    //   const inputElement = document.createElement('input');
+    //   inputElement.type = 'number';
+    //   inputElement.style.width = '90px';
+    //   inputElement.style.height = '14px';
+    //   inputElement.style.border = 'none';
+    //   inputElement.style.margin = '0 2px';
+    //   inputElement.style.padding = '5px';
+    //   inputElement.style.textAlign = 'center';
+    //   inputElement.min = '0';
+    //   inputElement.max = '1';
+    //   inputElement.step = '0.001';
+
+    //   // 输入框默认值
+    //   const weight = this.weights.find(w => w.marker.stationId === marker.stationId);
+    //   inputElement.value = weight ? parseFloat(weight.compWeight).toFixed(3) : '0.000';
+
+    //   // 添加键盘事件监听器
+    //   inputElement.addEventListener('keyup', (event) => {
+    //     if (event.key === 'Enter') {
+    //       const inputValue = parseFloat(inputElement.value);
+    //       if (inputValue >= 0 && inputValue <= 1) {
+    //         this.updateWeights(marker.stationId, inputValue);
+    //       } else {
+    //         alert('输入值必须在0到1之间');
+    //       }
+    //     }
+    //   });
+
+    //   container.appendChild(textSpan);
+    //   container.appendChild(lineDiv);
+    //   container.appendChild(inputElement);
+    // },
+
+    // updateWeights(stationId, newWeight) {
+    //   this.weights.forEach(weight => {
+    //     console.log(`MarkerId: ${weight.marker.stationId},Composite Weight: ${weight.compWeight}`);
+    //   });
+
+    //   let originalWeight = 0;
+
+    //   // 原始权重
+    //   this.weights.forEach(weight => {
+    //     if (weight.marker.stationId === stationId) {
+    //       originalWeight = weight.compWeight;
+    //       weight.compWeight = newWeight;
+    //     }
+    //   });
+
+    //   // 如果有修改就调整其他权重
+    //   if (originalWeight !== newWeight) {
+    //     const scale = (1 - newWeight) / (1 - originalWeight);
+    //     this.weights.forEach(weight => {
+    //       if (weight.marker.stationId !== stationId) {
+    //         weight.compWeight *= scale;
+    //       }
+    //     });
+    //   }
+
+    //   // 微调确保权重和为1
+    //   let totalWeight = this.weights.reduce((sum, weight) => sum + weight.compWeight, 0);
+    //   if (totalWeight !== 1) {
+    //     const error = 1 - totalWeight;
+    //     this.weights[0].compWeight += error;
+    //   }
+
+    //   this.weights.forEach(weight => {
+    //     console.log(`MarkerId: ${weight.marker.stationId},Composite Weight: ${weight.compWeight}`);
+    //   });
+
+    //   this.$nextTick(() => {
+    //     this.elseMarkers = this.markersNearby.filter(marker => marker !== this.selectedMarker);
+
+    //     this.elseMarkers.forEach(marker => {
+    //       this.drawInputBox(marker);
+    //     });
+
+    //     this.drawCalLine();
+    //   });
+
+    // },
 
     toggleMarker(marker) {
       if (marker !== this.selectedMarker) {
@@ -1010,16 +1506,21 @@ export default {
           })
         }
 
-        this.elseMarkers = this.markersNearby.filter(marker => marker !== this.selectedMarker);
+        this.elseMarkers = this.markersNearby;
         this.elseMarkers.forEach(marker => {
-          this.calWeight();
-          this.drawCalLine();
+          // this.calWeight();
+          // this.drawCalLine();
           this.drawSvgRefOR(marker);
         });
-
-        this.weights.forEach(weight => {
-          console.log(`MarkerId: ${weight.marker.stationId}, Related Weight: ${weight.relatedWeight}, Related WeightS: ${weight.relatedWeightS}, Distance Weight: ${weight.distanceWeight}, Distance WeightS: ${weight.distanceWeightS}, Composite Weight: ${weight.compWeight}`);
+        this.$nextTick(() => {
+          const svgId = 'elseSvg' + this.selectedMarker.stationId;
+          d3.select('#' + svgId).selectAll('rect')
+            .style('stroke', '#FF8066');
         });
+
+        // this.weights.forEach(weight => {
+        //   console.log(`MarkerId: ${weight.marker.stationId}, Related Weight: ${weight.relatedWeight}, Related WeightS: ${weight.relatedWeightS}, Distance Weight: ${weight.distanceWeight}, Distance WeightS: ${weight.distanceWeightS}, Composite Weight: ${weight.compWeight}`);
+        // });
       }
     },
 
@@ -1028,7 +1529,7 @@ export default {
       this.map.setView(this.selectedMarker.getLatLng(), 11);
       //改回参考点的图标
       this.markersInMap.forEach(marker => {
-        if (this.markersNearby.includes(marker) && marker !== this.selectedMarker) {
+        if (this.markersNearby.includes(marker)) {
           // marker.setIcon(this.pointIcon);
           marker.setStyle({
             fillColor: "#fff",
@@ -1047,14 +1548,34 @@ export default {
 
     confirmSelection() {
       this.state = 3;
-      this.carryOverlayImages();
+
+      this.markersInMap.forEach(marker => {
+        marker.off('click').on('click', () => {
+        });
+      });
+
+      // 移动
+      this.show = !this.show;
+      
+      nextTick(() => {
+        this.carryOverlayImages();
+        const timeSelectorContainer = document.getElementById('time-selector-container');
+        if (timeSelectorContainer) {
+          timeSelectorContainer.style.bottom = '90vh';
+        }
+      });
     },
 
     carryOverlayImages() {
+      this.linedImages.forEach(image => {
+        const svgId = `svg${image.id}`;
+        d3.select(`#${svgId}`).selectAll("*").remove();
+      });
+
       const screenWidth = 400;
       const imageHeight = 135;
       const imageWidth = screenWidth * 0.95;
-      const margin = 3; // 空隙宽度
+      const margin = 6; // 空隙宽度
 
       const sortedMarkers = this.markersNearby.sort((markerA, markerB) => {
         const latA = markerA.getLatLng().lat;
@@ -1069,18 +1590,24 @@ export default {
         return {
           id,
           top: imageTop,
-          left: 2,
+          left: 10,
           width: imageWidth,
           height: imageHeight
         };
       });
 
-      console.log("selectedMarker.stationId: " + this.selectedMarker.stationId);
-      console.log("this.selectedMarker: " + this.selectedMarker);
+      // console.log("selectedMarker.stationId: " + this.selectedMarker.stationId);
+      // console.log("this.selectedMarker: " + this.selectedMarker);
       this.linedImages.forEach((image, index) => {
         // 异步更新后再画
         this.$nextTick(() => {
-          const color = index < this.colorSequence.length ? this.colorSequence[index] : this.selHsv();
+          let color;
+          if (image.id === this.selectedMarker.stationId) {
+            color = '#F7EEAD';
+          } else {
+            // 从颜色序列中分配颜色
+            color = index < this.colorSequence.length ? this.colorSequence[index] : this.selHsv();
+          }
 
           // 修改标记点颜色
           const marker = this.markersNearby.find(m => m.stationId === image.id);
@@ -1088,7 +1615,7 @@ export default {
             if (marker === this.selectedMarker) {
               marker.setStyle({
                 fillColor: color,
-                color: "#EE781F"
+                color: "#F29A76"
               });
             } else {
               marker.setStyle({
@@ -1101,12 +1628,12 @@ export default {
           // 绘制圆圈
           this.drawCirOnSvg(image.id, color);
 
-          const { xScale, yScale, innerHeight } = this.drawSvg('svg' + image.id);
+          const { xScale, yScale , innerHeight } = this.drawSvg('svg' + image.id); //
 
           // 对选中点
           if (this.selectedMarker && 'svg' + image.id === 'svg' + this.selectedMarker.stationId) {
             //console.log("Selected M is here!");
-            this.drawSelectedSvg('svg' + image.id, xScale, yScale, innerHeight);
+            this.drawSelectedSvg('svg' + image.id, xScale, yScale , innerHeight); //
           }
 
           this.chgColSvg(image.id);
@@ -1119,7 +1646,7 @@ export default {
 
     selHsv() {
       const hue = this.nextHue;
-      this.nextHue = (this.nextHue + 360 / (this.markersNearby.length - this.colorSequence.length)) % 360;
+      this.nextHue = (this.nextHue + 320 / (this.markersNearby.length - this.colorSequence.length)) % 360 + 20;
       return `hsl(${hue}, 80%, 50%)`;
     },
 
@@ -1144,273 +1671,705 @@ export default {
     },
 
     drawSvg(svgId) {
-      const data = this.findDataForStation(svgId.replace('svg', ''));
-      if (data.length === 0) {
+      // 获取missingdata
+      const missingdata = this.findData(svgId.replace('svg', ''), this.startTime, this.endTime, 1);
+      if (missingdata.length === 0) {
         return; // 如果没有数据，就不进行绘制
       }
 
-      // 分段
-      const dataSegments = this.splitDataIntoSegments(data);
+      // 获取数据
+      const predictdata = this.findData(svgId.replace('svg', ''), this.startTime, this.endTime, 2);
+      const realdata = this.findData(svgId.replace('svg', ''), this.startTime, this.endTime, 3);
+      const saveddata = this.findSavedData(svgId.replace('svg', ''), this.startTime, this.endTime);
+      saveddata.sort((a, b) => new Date(a.time) - new Date(b.time));
+      const MSdata = this.findData(svgId.replace('svg', ''), this.startTime, this.endTime, 4);
 
+      // missingdata
+      const missingDataSegments = this.splitDataIntoSegments(missingdata);
+
+      // SVG设置
       const svg = d3.select('#' + svgId);
       const svgWidth = svg.node().clientWidth;
       const svgHeight = svg.node().clientHeight;
-
       const margin = { top: 10, right: 20, bottom: 18, left: 25 };
       const innerWidth = svgWidth - margin.left - margin.right;
       const innerHeight = svgHeight - margin.top - margin.bottom;
+      const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 
-      const g = svg.append('g')
-        .attr('transform', `translate(${margin.left},${margin.top})`);
+      // 比例尺
+      const xScale = d3.scaleTime().domain(d3.extent([...missingdata, ...predictdata], d => new Date(d.time))).range([0, innerWidth]);
+      const yScale = d3.scaleLinear().domain([0, Math.ceil((d3.max([...missingdata, ...predictdata], d => +d.PM25_Concentration) + 50) / 20) * 20]).range([innerHeight, 0]);
 
-      const xScale = d3.scaleTime()
-        .domain(d3.extent(data, d => new Date(d.time)))
-        .range([0, innerWidth]);
+      // 绘制轴
+      g.append('g').attr('transform', `translate(0,${innerHeight})`).call(d3.axisBottom(xScale));
+      g.append('g').call(d3.axisLeft(yScale).ticks(d3.max([...missingdata, ...predictdata], d => +d.PM25_Concentration) / 20));
 
-      const yScale = d3.scaleLinear()
-        .domain([0, Math.ceil((d3.max(data, d => +d.PM25_Concentration) + 10) / 20) * 20])
-        .range([innerHeight, 0]);
+      if (svgId == 'svg' + this.selectedMarker.stationId) {
+        // 绘制predictdata的曲线
+        // 开头（可能有）
+        const endOfPredictSegment = missingDataSegments[0][0];
+        console.log("End of Predict Segment:", new Date(endOfPredictSegment.time)); // 输出第一个实测数据点的时间
 
-      g.append('g')
-        .attr('transform', `translate(0,${innerHeight})`)
-        .call(d3.axisBottom(xScale));
-
-      g.append('g')
-        .call(d3.axisLeft(yScale).ticks(d3.max(data, d => +d.PM25_Concentration) / 20));
-
-      this.containerData[svgId] = [];
-      
-      // 对每个数据段
-      dataSegments.forEach(segment => {
-        g.append('path')
-          .datum(segment)
-          .attr('fill', 'none')
-          .attr('stroke', '#009EFA')
-          .attr('stroke-width', 1.5)
-          .attr('d', d3.line()
-            .x(d => xScale(new Date(d.time)))
-            .y(d => yScale(+d.PM25_Concentration))
-          );
-        segment.forEach(d => {
-          const point = {
-            x: xScale(new Date(d.time)),
-            y: yScale(+d.PM25_Concentration),
-            data: d
-          };
-          this.containerData[svgId].push(point);
+        const firstSegment = predictdata.filter(d => {
+            // console.log("Predict data time:", new Date(d.time), "Start time:", new Date(this.startTime), "End of predict segment time:", new Date(endOfPredictSegment.time)); // 输出比较的每个时间
+            return new Date(d.time) >= new Date(this.startTime) && new Date(d.time) < new Date(endOfPredictSegment.time);
         });
+
+        if (firstSegment.length > 0) {
+          console.log("firstSegment.length > 0");
+          // 将predictSegment与右侧missingdata的第一个数据点相连
+          const rightDataPoint = [...firstSegment, endOfPredictSegment];
+          g.append("path")
+            .datum(rightDataPoint)
+            .attr("fill", "none")
+            .attr("stroke", "green")
+            .attr("stroke-width", 1.5)
+            .attr("stroke-opacity", 0.8)
+            .attr("d", d3.line().x(d => xScale(new Date(d.time))).y(d => yScale(+d.PM25_Concentration)));
+
+            firstSegment.forEach(dataPoint => {
+            g.append("circle")
+              .attr("cx", xScale(new Date(dataPoint.time)))
+              .attr("cy", yScale(+dataPoint.PM25_Concentration))
+              .attr("r", 1.5) // 圆点的半径
+              .attr("fill-opacity", 0.8)
+              .attr("fill", "#377D22");
+          });
+        }
+
+        // 中间段
+        for (let i = 0; i < missingDataSegments.length - 1; i++) {
+          const endOfCurrentSegment = missingDataSegments[i][missingDataSegments[i].length - 1];
+          const startOfNextSegment = missingDataSegments[i + 1][0];
+
+          const predictSegment = predictdata.filter(d => new Date(d.time) > new Date(endOfCurrentSegment.time) && new Date(d.time) < new Date(startOfNextSegment.time));
+
+          if (predictSegment.length > 0) {
+            // 将predictSegment与左侧missingdata的最后一个数据点相连
+            const leftDataPoint = [endOfCurrentSegment, ...predictSegment];
+            g.append("path")
+              .datum(leftDataPoint)
+              .attr("fill", "none")
+              .attr("stroke", "green")
+              .attr("stroke-width", 1.5)
+              .attr("stroke-opacity", 0.8)
+              .attr("d", d3.line().x(d => xScale(new Date(d.time))).y(d => yScale(+d.PM25_Concentration)));
+
+            // 将predictSegment与右侧missingdata的第一个数据点相连
+            const rightDataPoint = [...predictSegment, startOfNextSegment];
+            g.append("path")
+              .datum(rightDataPoint)
+              .attr("fill", "none")
+              .attr("stroke", "green")
+              .attr("stroke-width", 1.5)
+              .attr("stroke-opacity", 0.8)
+              .attr("d", d3.line().x(d => xScale(new Date(d.time))).y(d => yScale(+d.PM25_Concentration)));
+
+            predictSegment.forEach(dataPoint => {
+              g.append("circle")
+                .attr("cx", xScale(new Date(dataPoint.time)))
+                .attr("cy", yScale(+dataPoint.PM25_Concentration))
+                .attr("r", 1.5) // 圆点的半径
+                .attr("fill-opacity", 0.8)
+                .attr("fill", "#377D22");
+            });
+          }
+        }
+
+        // 结尾（可能有）
+        const startOfPredictSegment = missingDataSegments[missingDataSegments.length - 1][missingDataSegments[missingDataSegments.length - 1].length - 1];
+
+        const lastSegment = predictdata.filter(d => {
+            // console.log("Predict data time:", new Date(d.time), "Start time:", new Date(this.startTime), "End of predict segment time:", new Date(endOfPredictSegment.time)); // 输出比较的每个时间
+            return new Date(d.time) <= new Date(this.endTime) && new Date(d.time) > new Date(startOfPredictSegment.time);
+        });
+
+        if (lastSegment.length > 0) {
+          console.log("firstSegment.length > 0");
+          // 将predictSegment与右侧missingdata的第一个数据点相连
+          const rightDataPoint = [startOfPredictSegment, ...lastSegment];
+          g.append("path")
+            .datum(rightDataPoint)
+            .attr("fill", "none")
+            .attr("stroke", "green")
+            .attr("stroke-width", 1.5)
+            .attr("stroke-opacity", 0.8)
+            .attr("d", d3.line().x(d => xScale(new Date(d.time))).y(d => yScale(+d.PM25_Concentration)));
+
+            lastSegment.forEach(dataPoint => {
+            g.append("circle")
+              .attr("cx", xScale(new Date(dataPoint.time)))
+              .attr("cy", yScale(+dataPoint.PM25_Concentration))
+              .attr("r", 1.5) // 圆点的半径
+              .attr("fill-opacity", 0.8)
+              .attr("fill", "#377D22");
+          });
+        }
+
+        // 绘制MissSavedata的曲线
+        // 开头（可能有）
+        const endOfMSSegment = missingDataSegments[0][0];
+        // console.log("End of Predict Segment:", new Date(endOfPredictSegment.time)); // 输出第一个实测数据点的时间
+
+        const firstSegmentMS = MSdata.filter(d => {
+            // console.log("Predict data time:", new Date(d.time), "Start time:", new Date(this.startTime), "End of predict segment time:", new Date(endOfPredictSegment.time)); // 输出比较的每个时间
+            return new Date(d.time) >= new Date(this.startTime) && new Date(d.time) < new Date(endOfMSSegment.time);
+        });
+
+        if (firstSegmentMS.length > 0) {
+          // console.log("firstSegmentMS.length > 0");
+          // 将predictSegment与右侧missingdata的第一个数据点相连
+          const rightDataPoint = [...firstSegmentMS, endOfMSSegment];
+          g.append("path")
+            .datum(rightDataPoint)
+            .attr("fill", "none")
+            .attr("stroke", "grey")
+            .attr("stroke-width", 1.5)
+            .attr("stroke-opacity", 0.8)
+            .attr("d", d3.line().x(d => xScale(new Date(d.time))).y(d => yScale(+d.PM25_Concentration)));
+
+            firstSegmentMS.forEach(dataPoint => {
+            g.append("circle")
+              .attr("cx", xScale(new Date(dataPoint.time)))
+              .attr("cy", yScale(+dataPoint.PM25_Concentration))
+              .attr("r", 1.5) // 圆点的半径
+              .attr("fill-opacity", 0.8)
+              .attr("fill", "grey");
+          });
+        }
+
+        // 中间段
+        for (let i = 0; i < missingDataSegments.length - 1; i++) {
+          const endOfCurrentSegment = missingDataSegments[i][missingDataSegments[i].length - 1];
+          const startOfNextSegment = missingDataSegments[i + 1][0];
+
+          const MSSegment = MSdata.filter(d => new Date(d.time) > new Date(endOfCurrentSegment.time) && new Date(d.time) < new Date(startOfNextSegment.time));
+
+          if (MSSegment.length > 0) {
+            // 将realSegment与左侧missingdata的最后一个数据点相连
+            const leftDataPoint = [endOfCurrentSegment, ...MSSegment];
+            g.append("path")
+              .datum(leftDataPoint)
+              .attr("fill", "none")
+              .attr("stroke", "grey")
+              .attr("stroke-width", 1.5)
+              .attr("stroke-opacity", 0.8)
+              .attr("d", d3.line().x(d => xScale(new Date(d.time))).y(d => yScale(+d.PM25_Concentration)));
+
+            // 将realSegment与右侧missingdata的第一个数据点相连
+            const rightDataPoint = [...MSSegment, startOfNextSegment];
+            g.append("path")
+              .datum(rightDataPoint)
+              .attr("fill", "none")
+              .attr("stroke", "grey")
+              .attr("stroke-width", 1.5)
+              .attr("stroke-opacity", 0.8)
+              .attr("d", d3.line().x(d => xScale(new Date(d.time))).y(d => yScale(+d.PM25_Concentration)));
+
+            MSSegment.forEach(dataPoint => {
+              g.append("circle")
+                .attr("cx", xScale(new Date(dataPoint.time)))
+                .attr("cy", yScale(+dataPoint.PM25_Concentration))
+                .attr("r", 1.5) // 圆点的半径
+                .attr("fill-opacity", 0.8)
+                .attr("fill", "grey");
+            });
+          }
+        }
+
+        // 结尾（可能有）
+        const startOfMSSegment = missingDataSegments[missingDataSegments.length - 1][missingDataSegments[missingDataSegments.length - 1].length - 1];
+
+        const lastSegmentMS = MSdata.filter(d => {
+            // console.log("Predict data time:", new Date(d.time), "Start time:", new Date(this.startTime), "End of predict segment time:", new Date(endOfPredictSegment.time)); // 输出比较的每个时间
+            return new Date(d.time) <= new Date(this.endTime) && new Date(d.time) > new Date(startOfMSSegment.time);
+        });
+
+        if (lastSegmentMS.length > 0) {
+          // console.log("firstSegmentMS.length > 0");
+          // 将realSegment与右侧missingdata的第一个数据点相连
+          const rightDataPoint = [startOfMSSegment, ...lastSegmentMS];
+          g.append("path")
+            .datum(rightDataPoint)
+            .attr("fill", "none")
+            .attr("stroke", "grey")
+            .attr("stroke-width", 1.5)
+            .attr("stroke-opacity", 0.8)
+            .attr("d", d3.line().x(d => xScale(new Date(d.time))).y(d => yScale(+d.PM25_Concentration)));
+
+            lastSegmentMS.forEach(dataPoint => {
+            g.append("circle")
+              .attr("cx", xScale(new Date(dataPoint.time)))
+              .attr("cy", yScale(+dataPoint.PM25_Concentration))
+              .attr("r", 1.5) // 圆点的半径
+              .attr("fill-opacity", 0.8)
+              .attr("fill", "grey");
+          });
+        }
+      }
+
+      if (this.isshowLines && svgId == 'svg' + this.selectedMarker.stationId) {
+        // 绘制realdata的曲线
+        // 开头（可能有）
+        const endOfRealSegment = missingDataSegments[0][0];
+        // console.log("End of Predict Segment:", new Date(endOfPredictSegment.time)); // 输出第一个实测数据点的时间
+
+        const firstSegmentReal = realdata.filter(d => {
+            // console.log("Predict data time:", new Date(d.time), "Start time:", new Date(this.startTime), "End of predict segment time:", new Date(endOfPredictSegment.time)); // 输出比较的每个时间
+            return new Date(d.time) >= new Date(this.startTime) && new Date(d.time) < new Date(endOfRealSegment.time);
+        });
+
+        if (firstSegmentReal.length > 0) {
+          // console.log("firstSegment.length > 0");
+          // 将predictSegment与右侧missingdata的第一个数据点相连
+          const rightDataPoint = [...firstSegmentReal, endOfRealSegment];
+          g.append("path")
+            .datum(rightDataPoint)
+            .attr("fill", "none")
+            .attr("stroke", "orange")
+            .attr("stroke-width", 1.5)
+            .attr("stroke-opacity", 0.8)
+            .attr("d", d3.line().x(d => xScale(new Date(d.time))).y(d => yScale(+d.PM25_Concentration)));
+
+            firstSegmentReal.forEach(dataPoint => {
+            g.append("circle")
+              .attr("cx", xScale(new Date(dataPoint.time)))
+              .attr("cy", yScale(+dataPoint.PM25_Concentration))
+              .attr("r", 1.5) // 圆点的半径
+              .attr("fill-opacity", 0.8)
+              .attr("fill", "orange");
+          });
+        }
+
+        // 中间段
+        for (let i = 0; i < missingDataSegments.length - 1; i++) {
+          const endOfCurrentSegment = missingDataSegments[i][missingDataSegments[i].length - 1];
+          const startOfNextSegment = missingDataSegments[i + 1][0];
+
+          const realSegment = realdata.filter(d => new Date(d.time) > new Date(endOfCurrentSegment.time) && new Date(d.time) < new Date(startOfNextSegment.time));
+
+          if (realSegment.length > 0) {
+            // 将realSegment与左侧missingdata的最后一个数据点相连
+            const leftDataPoint = [endOfCurrentSegment, ...realSegment];
+            g.append("path")
+              .datum(leftDataPoint)
+              .attr("fill", "none")
+              .attr("stroke", "orange")
+              .attr("stroke-width", 1.5)
+              .attr("stroke-opacity", 0.8)
+              .attr("d", d3.line().x(d => xScale(new Date(d.time))).y(d => yScale(+d.PM25_Concentration)));
+
+            // 将realSegment与右侧missingdata的第一个数据点相连
+            const rightDataPoint = [...realSegment, startOfNextSegment];
+            g.append("path")
+              .datum(rightDataPoint)
+              .attr("fill", "none")
+              .attr("stroke", "orange")
+              .attr("stroke-width", 1.5)
+              .attr("stroke-opacity", 0.8)
+              .attr("d", d3.line().x(d => xScale(new Date(d.time))).y(d => yScale(+d.PM25_Concentration)));
+
+            realSegment.forEach(dataPoint => {
+              g.append("circle")
+                .attr("cx", xScale(new Date(dataPoint.time)))
+                .attr("cy", yScale(+dataPoint.PM25_Concentration))
+                .attr("r", 1.5) // 圆点的半径
+                .attr("fill-opacity", 0.8)
+                .attr("fill", "orange");
+            });
+          }
+        }
+
+        // 结尾（可能有）
+        const startOfRealSegment = missingDataSegments[missingDataSegments.length - 1][missingDataSegments[missingDataSegments.length - 1].length - 1];
+
+        const lastSegmentReal = realdata.filter(d => {
+            // console.log("Predict data time:", new Date(d.time), "Start time:", new Date(this.startTime), "End of predict segment time:", new Date(endOfPredictSegment.time)); // 输出比较的每个时间
+            return new Date(d.time) <= new Date(this.endTime) && new Date(d.time) > new Date(startOfRealSegment.time);
+        });
+
+        if (lastSegmentReal.length > 0) {
+          console.log("firstSegment.length > 0");
+          // 将realSegment与右侧missingdata的第一个数据点相连
+          const rightDataPoint = [startOfRealSegment, ...lastSegmentReal];
+          g.append("path")
+            .datum(rightDataPoint)
+            .attr("fill", "none")
+            .attr("stroke", "orange")
+            .attr("stroke-width", 1.5)
+            .attr("stroke-opacity", 0.8)
+            .attr("d", d3.line().x(d => xScale(new Date(d.time))).y(d => yScale(+d.PM25_Concentration)));
+
+            lastSegmentReal.forEach(dataPoint => {
+            g.append("circle")
+              .attr("cx", xScale(new Date(dataPoint.time)))
+              .attr("cy", yScale(+dataPoint.PM25_Concentration))
+              .attr("r", 1.5) // 圆点的半径
+              .attr("fill-opacity", 0.8)
+              .attr("fill", "orange");
+          });
+        }
+
+        // 绘制saveddata的曲线
+      //   // 开头（可能有）
+      //   const endOfSavedSegment = missingDataSegments[0][0];
+      //   // console.log("End of Predict Segment:", new Date(endOfPredictSegment.time));
+
+      //   const firstSavedSegment = saveddata.filter(d => {
+      //       // console.log("Predict data time:", new Date(d.time), "Start time:", new Date(this.startTime), "End of predict segment time:", new Date(endOfPredictSegment.time)); // 输出比较的每个时间
+      //       return new Date(d.time) >= new Date(this.startTime) && new Date(d.time) < new Date(endOfSavedSegment.time);
+      //   });
+
+      //   if (firstSavedSegment.length > 0) {
+      //     // console.log("firstSegment.length > 0");
+      //     // 将predictSegment与右侧missingdata的第一个数据点相连
+      //     const rightDataPoint = [...firstSavedSegment, endOfSavedSegment];
+      //     g.append("path")
+      //       .datum(rightDataPoint)
+      //       .attr("fill", "none")
+      //       .attr("stroke", "grey")
+      //       .attr("stroke-width", 1.5)
+      //       .attr("stroke-opacity", 0.8)
+      //       .attr("d", d3.line().x(d => xScale(new Date(d.time))).y(d => yScale(+d.PM25_Concentration)));
+
+      //       firstSavedSegment.forEach(dataPoint => {
+      //       g.append("circle")
+      //         .attr("cx", xScale(new Date(dataPoint.time)))
+      //         .attr("cy", yScale(+dataPoint.PM25_Concentration))
+      //         .attr("r", 1.5) // 圆点的半径
+      //         .attr("fill-opacity", 0.8)
+      //         .attr("fill", "grey");
+      //     });
+      //   }
+
+      //   // 中间段
+      //   for (let i = 0; i < missingDataSegments.length - 1; i++) {
+      //     const endOfCurrentSegment = missingDataSegments[i][missingDataSegments[i].length - 1];
+      //     const startOfNextSegment = missingDataSegments[i + 1][0];
+
+      //     const savedSegment = saveddata.filter(d => new Date(d.time) > new Date(endOfCurrentSegment.time) && new Date(d.time) < new Date(startOfNextSegment.time));
+
+      //     if (savedSegment.length > 0) {
+      //       // 将savedSegment与左侧missingdata的最后一个数据点相连
+      //       const leftDataPoint = [endOfCurrentSegment, ...savedSegment];
+      //       g.append("path")
+      //         .datum(leftDataPoint)
+      //         .attr("fill", "none")
+      //         .attr("stroke", "grey")
+      //         .attr("stroke-width", 1.5)
+      //         .attr("stroke-opacity", 0.8)
+      //         .attr("d", d3.line().x(d => xScale(new Date(d.time))).y(d => yScale(+d.PM25_Concentration)));
+
+      //       // 将savedSegment与右侧missingdata的第一个数据点相连
+      //       const rightDataPoint = [...savedSegment, startOfNextSegment];
+      //       g.append("path")
+      //         .datum(rightDataPoint)
+      //         .attr("fill", "none")
+      //         .attr("stroke", "grey")
+      //         .attr("stroke-width", 1.5)
+      //         .attr("stroke-opacity", 0.8)
+      //         .attr("d", d3.line().x(d => xScale(new Date(d.time))).y(d => yScale(+d.PM25_Concentration)));
+
+      //       savedSegment.forEach(dataPoint => {
+      //         g.append("circle")
+      //           .attr("cx", xScale(new Date(dataPoint.time)))
+      //           .attr("cy", yScale(+dataPoint.PM25_Concentration))
+      //           .attr("r", 1.5) // 圆点的半径
+      //           .attr("fill-opacity", 0.8)
+      //           .attr("fill", "grey");
+      //       });
+      //     }
+      //   }
+
+      //   // 结尾（可能有）
+      //   const startOfSavedSegment = missingDataSegments[missingDataSegments.length - 1][missingDataSegments[missingDataSegments.length - 1].length - 1];
+
+      //   const lastSavedSegment = saveddata.filter(d => {
+      //       // console.log("Predict data time:", new Date(d.time), "Start time:", new Date(this.startTime), "End of predict segment time:", new Date(endOfPredictSegment.time)); // 输出比较的每个时间
+      //       return new Date(d.time) <= new Date(this.endTime) && new Date(d.time) > new Date(startOfSavedSegment.time);
+      //   });
+
+      //   if (lastSavedSegment.length > 0) {
+      //     console.log("firstSegment.length > 0");
+      //     // 将predictSegment与右侧missingdata的第一个数据点相连
+      //     const rightDataPoint = [startOfSavedSegment, ...lastSavedSegment];
+      //     g.append("path")
+      //       .datum(rightDataPoint)
+      //       .attr("fill", "none")
+      //       .attr("stroke", "grey")
+      //       .attr("stroke-width", 1.5)
+      //       .attr("stroke-opacity", 0.8)
+      //       .attr("d", d3.line().x(d => xScale(new Date(d.time))).y(d => yScale(+d.PM25_Concentration)));
+
+      //       lastSavedSegment.forEach(dataPoint => {
+      //       g.append("circle")
+      //         .attr("cx", xScale(new Date(dataPoint.time)))
+      //         .attr("cy", yScale(+dataPoint.PM25_Concentration))
+      //         .attr("r", 1.5) // 圆点的半径
+      //         .attr("fill-opacity", 0.8)
+      //         .attr("fill", "grey");
+      //     });
+      //   }
+      }
+
+      // 绘制missingdata的曲线
+      missingDataSegments.forEach(segment => {
+        if (segment.length === 1) {
+          g.append("circle").attr("cx", xScale(new Date(segment[0].time))).attr("cy", yScale(+segment[0].PM25_Concentration)).attr("r", 1.5).attr("fill", "#009EFA");
+        } else {
+          g.append("path").datum(segment).attr("fill", "none").attr("stroke", "#009EFA").attr("stroke-width", 1.5).attr("d", d3.line().x(d => xScale(new Date(d.time))).y(d => yScale(+d.PM25_Concentration)));
+        }
       });
 
       // 返回scale和尺寸给其他方法用
       return { xScale, yScale, innerHeight };
     },
 
-    drawSelectedSvg(svgId, xScale, yScale, innerHeight) {
-      // console.log("drawSelectedSvg running!");
-      const data = this.findDataForStation(svgId.replace('svg', ''));
+    drawSelectedSvg(svgId, xScale, yScale , innerHeight) { //
+      const data = this.findData(svgId.replace('svg', ''), this.startTime, this.endTime, 1);
       if (data.length === 0) {
-        return; // 如果没有数据则不画曲线图
+        return;
+      }
+
+      const missingDataSegments = [];
+
+      let currentSegment = [];
+
+      data.forEach((datum, index) => {
+        if (this.isValidPM25(datum.PM25_Concentration)) {
+          // 如果当前数据点有效，检查 currentSegment 是否有记录的无效数据点
+          if (currentSegment.length > 0) {
+            // 将当前有效数据点作为缺失段结束后的第一个有效数据点
+            currentSegment.push(datum.time);
+            // 将 currentSegment 添加到结果数组中
+            missingDataSegments.push([...currentSegment]);
+            // 清空 currentSegment 以便下次使用
+            currentSegment = [];
+          }
+        } else {
+          // 当前数据点无效
+          if (currentSegment.length === 0) {
+            // 如果是缺失段的开始，尝试添加前一个有效数据点的时间，如果当前是第一个数据点，则添加特殊标记
+            const prevTime = index > 0 && this.isValidPM25(data[index - 1].PM25_Concentration) ? data[index - 1].time : 'start';
+            currentSegment.push(prevTime);
+          }
+          // 将当前无效数据点的时间添加到 currentSegment 中
+          currentSegment.push(datum.time);
+        }
+      });
+
+      if (currentSegment.length > 0) {
+        // 如果最后是无效数据点，添加特殊标记
+        currentSegment.push('end');
+        missingDataSegments.push([...currentSegment]);
       }
 
       const svg = d3.select('#' + svgId);
       const g = svg.select('g');
-      const proximityRadius = 5; // 鼠标靠近判定半径
-      let guideLineXCoords = [];
-      this.filledCircles = [];
+
+      let guideLineXCoords = []; 
       
-      let startX, startY, endX, endY = null;
-
-      // 对缺失数据段
-      this.missingDataIntervals.forEach((interval, index) => {
-        //前后有效点的坐标
-        startX = xScale(new Date(interval.start));
-        startY = yScale(this.missingY[index].startY);
-        endX = xScale(new Date(interval.end));
-        endY = yScale(this.missingY[index].endY);
-
-        // 缺失段开始点
-        g.append('circle')
-          .attr('cx', startX)
-          .attr('cy', startY)
-          .attr('r', 3)
-          .style('fill', 'none')
-          .style('stroke', 'red');
-
-        // 结束点
-        g.append('circle')
-          .attr('cx', endX)
-          .attr('cy', endY)
-          .attr('r', 3)
-          .style('fill', 'none')
-          .style('stroke', 'red');
-
-        // 缺失数据竖直引导线
-        const startTime = new Date(interval.start);
-        const endTime = new Date(interval.end);
-        for (let time = new Date(startTime); time <= endTime; time.setHours(time.getHours() + 1)) {
-          const guideLineX = xScale(time);
-          guideLineXCoords.push(guideLineX);
-          
-          g.append('line')
-            .attr('x1', xScale(time))
-            .attr('y1', 0)
-            .attr('x2', xScale(time))
-            .attr('y2', innerHeight)
-            .style('stroke', 'grey')
-            .style('stroke-dasharray', ('2, 2'));
-        }
-      });
-
-      guideLineXCoords = guideLineXCoords.filter((value, index, self) => self.indexOf(value) === index);// 去重
-      guideLineXCoords.sort((a, b) => a - b); // 排序
-      if (guideLineXCoords.length > 2) {
-        guideLineXCoords.shift(); // 删最小值
-        guideLineXCoords.pop(); // 删最大值
-      }
-      //console.log("Guide line X coordinates without min and max: ", guideLineXCoords);
-
-      // 鼠标移动事件
-      svg.on("mousemove", (event) => {
-        const [mouseX, mouseY] = d3.pointer(event, g.node());
-
-        // 开始和结束点
-        let nearStart = Math.hypot(startX - mouseX, startY - mouseY) <= proximityRadius;
-        let nearEnd = Math.hypot(endX - mouseX, endY - mouseY) <= proximityRadius;
-
-        g.selectAll('.start-circle').remove();
-        g.selectAll('.end-circle').remove();
-        if (nearStart) {
-          g.append('circle').classed('start-circle', true)
-            .attr('cx', startX).attr('cy', startY).attr('r', 3).style('fill', 'red');
-        }
-        if (nearEnd) {
-          g.append('circle').classed('end-circle', true)
-            .attr('cx', endX).attr('cy', endY).attr('r', 3).style('fill', 'red');
-        }
-
-        // 清除之前的空心圆形和文本框
-        g.selectAll('.hollow-circle, .text-box, .text-label').remove();
-
-        // 检查鼠标是否靠近引导线
-        const nearGuideLineIndex = guideLineXCoords.findIndex(guideLineX => Math.abs(mouseX - guideLineX) <= proximityRadius / 3);
-        const nearGuideLineX = guideLineXCoords[nearGuideLineIndex];
-
-        if (nearGuideLineIndex >= 0 && mouseY >= 0 && mouseY <= innerHeight) {
-          // 在靠近的引导线上绘制一个空心圆形
-          g.append('circle').classed('hollow-circle', true)
-            .attr('cx', nearGuideLineX).attr('cy', mouseY).attr('r', 3)
-            .style('fill', 'none').style('stroke', 'red');
-          
-          // 文本内容
-          const textContent = "Y: " + yScale.invert(mouseY).toFixed(2);
-
-          // 绘制文本框背景
-          g.append('rect').classed('text-box', true)
-            .attr('x', nearGuideLineX + 5)
-            .attr('y', mouseY - 10)
-            .attr('width', 60)
-            .attr('height', 18)
-            .style('fill', 'white')
-            .style('stroke', '#7E89FE')
-            .style('opacity', 0.8);
-
-          // 绘制文本
-          g.append('text').classed('text-label', true)
-            .attr('x', nearGuideLineX + 7)
-            .attr('y', mouseY)
-            .text(textContent)
-            .style('font-size', '12px')
-            .style('font-family', 'Arial, sans-serif');
-        }
-      });
-
-      // 鼠标点击事件
-      svg.on("click", (event) => {
-        const [mouseX, mouseY] = d3.pointer(event, g.node());
-
-        // 清除之前画的
-        g.selectAll('.guide-line').remove();
-        g.selectAll('.filled-circle').remove();
-
-        // 检查鼠标是否靠近引导线
-        const nearGuideLineIndex = guideLineXCoords.findIndex(guideLineX => Math.abs(mouseX - guideLineX) <= proximityRadius / 3);
-        const nearGuideLineX = guideLineXCoords[nearGuideLineIndex];
-
-        if (nearGuideLineIndex >= 0 && mouseY >= 0 && mouseY <= innerHeight) {
-          const existingIndex = this.filledCircles.findIndex(circle => Math.abs(circle.x - nearGuideLineX) < proximityRadius / 3);
-          if (existingIndex >= 0) {
-            this.filledCircles.splice(existingIndex, 1); // 移除已有坐标
+      missingDataSegments.forEach(segment => {
+        // 检查是否有开始的特殊标记，没有则画蓝色实心圆
+        if (!segment.startMark) {
+          const startTime = segment[0];
+          const startData = data.find(d => d.time === startTime);
+          if (startData) {
+            g.append("circle")
+              .attr("cx", xScale(new Date(startData.time)))
+              .attr("cy", yScale(startData.PM25_Concentration))
+              .attr("r", 2)
+              .attr("fill", "blue");
           }
-          this.filledCircles.push({x: nearGuideLineX, y: mouseY}); // 添加新坐标
-
-          // 绘制实心圆形
-          this.filledCircles.forEach(circle => {
-            g.append('circle').classed('filled-circle', true)
-              .attr('cx', circle.x).attr('cy', circle.y).attr('r', 3)
-              .style('fill', 'red');
-          });
         }
 
-        //画线
-        guideLineXCoords.sort((a, b) => a - b);
+        // 检查是否有结束的特殊标记，没有则画蓝色实心圆
+        if (!segment.endMark) {
+          const endTime = segment[segment.length - 1];
+          const endData = data.find(d => d.time === endTime);
+          if (endData) {
+            g.append("circle")
+              .attr("cx", xScale(new Date(endData.time)))
+              .attr("cy", yScale(endData.PM25_Concentration))
+              .attr("r", 2)
+              .attr("fill", "blue");
+          }
+        }
 
-        let previousPoint = null; // 用于存储前一个点
+        // 画引导线
+        segment.forEach((time, index) => {
+          if (index > 0 && index < segment.length - 1) {
+            g.append('line')
+              .attr('x1', xScale(new Date(time)))
+              .attr('y1', 0)
+              .attr('x2', xScale(new Date(time)))
+              .attr('y2', innerHeight)
+              .style('stroke', 'red')
+              .style('stroke-dasharray', ('2, 2'));
 
-        guideLineXCoords.forEach((guideLineX, index) => {
-          // 查找filledCircles中横坐标等于guideLineX的点
-          const currentPoint = this.filledCircles.find(circle => circle.x === guideLineX);
-
-          if (currentPoint) {
-            // 最小的guideLineX与开始点相连
-            if (index === 0) {
-              g.append('line').classed('guide-line', true)
-                .attr('x1', startX).attr('y1', startY)
-                .attr('x2', currentPoint.x).attr('y2', currentPoint.y)
-                .style('stroke', 'blue');
-            }
-
-            // 连接当前点与前一个点
-            if (previousPoint) {
-              g.append('line').classed('guide-line', true)
-                .attr('x1', previousPoint.x).attr('y1', previousPoint.y)
-                .attr('x2', currentPoint.x).attr('y2', currentPoint.y)
-                .style('stroke', 'blue');
-            }
-
-            previousPoint = currentPoint; // 更新前一个点为当前点
-
-            // 如果是最大的guideLineX，则与结束点相连
-            if (index === guideLineXCoords.length - 1) {
-              g.append('line').classed('guide-line', true)
-                .attr('x1', currentPoint.x).attr('y1', currentPoint.y)
-                .attr('x2', endX).attr('y2', endY)
-                .style('stroke', 'blue');
-            }
+            const xCoord = xScale(new Date(time));
+            guideLineXCoords.push(xCoord);
           }
         });
-        this.savePoints = this.filledCircles.map(circle => ({
-          x: xScale.invert(circle.x),
-          y: yScale.invert(circle.y)
-        }));
+      });
+      
+      let proximityRadius = 3;
+
+      svg.on('mousemove', function(event) {
+        const [mouseX, mouseY] = d3.pointer(event, g.node());
+
+        g.selectAll('.guide-circle, .value-box, .value-text').remove();
+
+        guideLineXCoords.forEach(guideLineX => {
+          if (Math.abs(guideLineX - mouseX) <= proximityRadius && mouseY >= 0 && mouseY <= innerHeight) {
+            // 如果靠近引导线，画红色空心圆
+            g.append('circle')
+              .classed('guide-circle', true)
+              .attr('cx', guideLineX)
+              .attr('cy', mouseY)
+              .attr('r', 2) // 半径为2
+              .style('fill', 'none')
+              .style('stroke', 'red');
+
+            const value = yScale.invert(mouseY).toFixed(2);
+
+            g.append('rect')
+              .classed('value-box', true)
+              .attr('x', guideLineX - 15)
+              .attr('y', mouseY - 26)
+              .attr('width', 30)
+              .attr('height', 15)
+              .attr('rx', 5)
+              .style('fill', 'white')
+              .style('stroke', 'grey');
+
+            // 绘制显示数值的文本
+            g.append('text')
+              .classed('value-text', true)
+              .attr('x', guideLineX)
+              .attr('y', mouseY - 15)
+              .attr('text-anchor', 'middle')
+              .style('fill', 'grey')
+              .style('font-family', 'Microsoft YaHei') // 微软雅黑
+              .style('font-weight', 'bold') // 加粗
+              .style('font-size', '9px') // 字大小
+              .text(value);
+          }
+        });
       });
 
-      // 鼠标离开事件
-      svg.on("mouseleave", () => {
-        // 获取与 SVG 关联的标记
-        const relatedMarker = this.markersInMap.find(marker => marker.stationId === svgId.replace('svg', ''));
+      let selectedCircles = [];
 
-        console.log(`SVG Mouseleave on: ${svgId.replace('svg', '')}, Marker found: ${!!relatedMarker}`);
-        // 恢复标记的图标
-        if (relatedMarker) {
-          // relatedMarker.setIcon(this.pointIcon); // 恢复到原始图标
-          relatedMarker.setStyle({
-            color: "#7E89FE"
-          })
-        }
+      svg.on('click', function(event) {
+        const [mouseX, mouseY] = d3.pointer(event, g.node());
 
-        // 恢复 SVG 的边框颜色
-        svg.style('border-color', '#7E89FE'); // 原始颜色
-      });
+        guideLineXCoords.forEach(guideLineX => {
+          if (Math.abs(guideLineX - mouseX) <= proximityRadius && mouseY >= 0 && mouseY <= innerHeight) {
+
+            const time = xScale.invert(guideLineX);
+            const value = yScale.invert(mouseY);
+
+            const existingIndex = selectedCircles.findIndex(circle => +circle.time === +time);
+            if (existingIndex !== -1) {
+              selectedCircles.splice(existingIndex, 1);
+            }
+
+            selectedCircles.push({ time, value });
+            console.log("selectedCircles:", selectedCircles);
+          }
+        });
+
+        // 清除之前画的selected-circle
+        g.selectAll('.selected-circle').remove();
+
+        // 重新画selected-circle
+        selectedCircles.forEach(circle => {
+          g.append('circle')
+            .classed('selected-circle', true)
+            .attr('cx', xScale(circle.time))
+            .attr('cy', yScale(circle.value))
+            .attr('r', 2)
+            .style('fill', 'red');
+        });
+
+        // 清除连线
+        g.selectAll('.connection-line').remove();
+
+        // 重新画连线
+        selectedCircles.forEach(circleA => {
+          missingDataSegments.forEach(segment => {
+            const index = segment.findIndex(time => +new Date(time) === +circleA.time);
+            if (index >= 0) { // 如果时间点位于当前段内
+              // 前后时间点
+              let prevTime;
+              
+              // console.log("prevTime", prevTime, "nextTime", nextTime);
+
+              if (index == 1 && segment[0] != 'start') {
+                let valuepre = data.find(d => d.time === segment[0]);
+                if (valuepre.PM25_Concentration !== undefined) {
+                  g.append('line')
+                    .classed('connection-line', true)
+                    .attr('x1', xScale(circleA.time))
+                    .attr('y1', yScale(circleA.value))
+                    .attr('x2', xScale(new Date(segment[0])))
+                    .attr('y2', yScale(valuepre.PM25_Concentration))
+                    .style('stroke', 'red');
+                }
+                
+              } else if (index > 1) {
+                prevTime = segment[index - 1];
+                selectedCircles.forEach(circleB => {
+                  // console.log("AAA", circleB.time, "BBB", new Date (prevTime));
+                  if (+new Date(prevTime) === +circleB.time) {
+                    g.append('line')
+                    .classed('connection-line', true)
+                    .attr('x1', xScale(circleA.time))
+                    .attr('y1', yScale(circleA.value))
+                    .attr('x2', xScale(circleB.time))
+                    .attr('y2', yScale(circleB.value))
+                    .style('stroke', 'red');
+                  }
+                });
+              }
+
+              if (index + 2 == segment.length && segment[index + 1] != 'end') { // 是倒数第二个，最后一个是有效点
+                let valuenext = data.find(d => d.time === segment[index + 1]);
+                if (valuenext.PM25_Concentration !== undefined) {
+                  g.append('line')
+                    .classed('connection-line', true)
+                    .attr('x1', xScale(circleA.time))
+                    .attr('y1', yScale(circleA.value))
+                    .attr('x2', xScale(new Date(segment[index + 1])))
+                    .attr('y2', yScale(valuenext.PM25_Concentration))
+                    .style('stroke', 'red');
+                }
+                
+              }
+            }
+          });
+        });
+
+        selectedCircles.forEach(circle => {
+          // 检查this.savedCircles中是否已存在具有相同time和marker的记录
+          const existingIndex = this.savedCircles.findIndex(item => 
+            +item.time === +circle.time && item.marker === this.selectedMarker.stationId
+          );
+
+          // 删除旧记录
+          if (existingIndex !== -1) {
+            this.savedCircles.splice(existingIndex, 1);
+          }
+
+          // 保存新记录
+          this.savedCircles.push({
+            time: circle.time,
+            marker: this.selectedMarker.stationId,
+            value: circle.value
+          });
+        });
+        console.log("savedCircles:", this.savedCircles);
+      }.bind(this));
     },
 
     chgColSvg(imageId) {
@@ -1419,15 +2378,15 @@ export default {
 
       // 为每个 chartImg 设置鼠标事件
       chartImg.addEventListener("mouseenter", () => {
-        // 更改标记图标外圈->绿色
+        // 更改标记图标外圈->浅蓝
         if (relatedMarker) {
           // relatedMarker.setIcon(this.point4Icon);
           relatedMarker.setStyle({
-            color: "#00C9A7"
+            color: "#87E4FA"
           })
         }
-        // 更改容器边框->绿色
-        chartImg.style.border = '3px solid #00C9A7';
+        // 更改容器边框->浅蓝
+        chartImg.style.boxShadow = '0 0 0 4px #9AD5FA';
       });
 
       chartImg.addEventListener("mouseleave", () => {
@@ -1446,7 +2405,7 @@ export default {
           }
         }
         // 恢复容器的边框颜色
-        chartImg.style.border = '2px solid #7E89FE';
+        chartImg.style.boxShadow = '0 0 0 0px';
       });
     },
 
@@ -1454,11 +2413,11 @@ export default {
       // 鼠标悬停
       marker.on('mouseover', () => {
         marker.setStyle({
-          color: "#00C9A7"
+          color: "#87E4FA"
         });
         const relatedImage = document.getElementById('chartimg-' + marker.stationId);
         if (relatedImage) {
-          relatedImage.style.border = '3px solid #00C9A7';
+          relatedImage.style.boxShadow = '0 0 0 4px #9AD5FA';
         }
 
         // 鼠标离开
@@ -1477,7 +2436,7 @@ export default {
               })
             }
             if (relatedImage) {
-              relatedImage.style.border = '2px solid #7E89FE';
+              relatedImage.style.boxShadow = '0 0 0 0px';
             }
             clearInterval(checkMouseLeave);
           }
@@ -1495,15 +2454,54 @@ export default {
     },
 
     saveChanges() {
-      if (this.selectedMarker) {
-        console.log('当前补充数据的监测站id: ', this.selectedMarker.stationId);
-      } else {
-        console.log('');
-      }
-      console.log('保存的坐标: ', this.savePoints);
+      let circlesData = [];
+
+      this.savedCircles.forEach(circle => {
+        const time = circle.time;
+        let timeStr = `${time.getFullYear()}/${String(time.getMonth() + 1).padStart(2, '0')}/${String(time.getDate()).padStart(2, '0')} ${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}:${String(time.getSeconds()).padStart(2, '0')}`;
+
+        circlesData.push({
+          Time: timeStr,
+          Station: circle.marker,
+          Saved: circle.value.toFixed(2)
+        });
+      });
+
+      fetch('http://127.0.0.1:5000/save-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(circlesData)
+      })
+      .then(response => response.text())
+      .then(data => {
+        console.log(data);
+        alert('填充数据已保存!');
+      })
+      .catch((error) => {
+        console.error('Error:', error);
+        alert('保存失败，请稍后重试。');
+      });
+    },
+
+    showLines() {
+      this.isshowLines = !this.isshowLines;
+      this.carryOverlayImages();
     },
 
     backToStart() {
+      // 移动
+      this.show = !this.show;
+      
+      nextTick(() => {
+        this.carryOverlayImages();
+        const timeSelectorContainer = document.getElementById('time-selector-container');
+        if (timeSelectorContainer) {
+          timeSelectorContainer.style.bottom = 0;
+        }
+      });
+
       // 清空选中的标记点和相关数组
       if (this.selectedMarker) {
         const latLng = this.selectedMarker.getLatLng();
@@ -1547,8 +2545,9 @@ export default {
         backgroundColor: 'white',
         margin: '5px',
         boxSizing: 'border-box',
-        border: '2px solid #7E89FE',
-        borderRadius: '10px',
+        // border: '2px solid #007AFF',
+        borderRadius: '2px',
+        opacity: 0.9,
       };
     },
 
@@ -1557,9 +2556,9 @@ export default {
       return {
         position: 'absolute',
         left: pos.x - 100 + 'px',
-        top: pos.y - 80 + 'px',
+        top: pos.y - 94 + 'px',
         width: '200px',
-        height: '80px',
+        height: '90px',
         zIndex: 500,
         opacity: 0.8,
       };
@@ -1594,33 +2593,120 @@ html, body {
   align-items: center;
 }
 
+#time-selector-container {
+  position: absolute;
+  bottom: 0;
+  left: 2vw;
+  width: 470px;
+  background-color: #97A5C0;
+  border: none;
+  border-top-left-radius: 3px;
+  border-top-right-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 10px;
+  transition: bottom 0.5s ease-in-out;
+  z-index: 900;
+}
+
+/* .one-image-container {
+  position: absolute;
+  left: 2vw;
+  top: calc(100vh - 200px);
+  width: 490px;
+  height: 200px;
+  background-color: #97A5C0;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  z-index: 900;
+} */
+
 #overlay-container > * {
   pointer-events: auto;
 }
 
-#chart-container {
+.chart-container {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 400px;
-  height: 100vh; /* 与视窗高度相同 */
+  top: 10vh;
+  left: 2vw;
+  width: 490px;
+  height: 90vh;
   overflow-y: auto; /* 允许垂直滚动 */
+  background-color: #97A5C0;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  z-index: 900;
+}
+
+/* 滚动条整体 */
+.chart-container::-webkit-scrollbar {
+  width: 10px; /* 宽度 */
+}
+
+/* 滚动条轨道 */
+.chart-container::-webkit-scrollbar-track {
+  background: transparent; /* 轨道背景透明 */
+}
+
+/* 滚动条滑块 */
+.chart-container::-webkit-scrollbar-thumb {
+  background: #E8E8E8; /* 滑块颜色 */
+  border-radius: 2px;
+}
+
+/* 鼠标悬停时滑块颜色 */
+.chart-container::-webkit-scrollbar-thumb:hover {
+  background: #E0E0E0; /* 鼠标悬停时滑块颜色 */
 }
 
 .map-button {
   pointer-events: auto;
   cursor: pointer; /*鼠标悬停为手形*/
-  height:35px;
-  width: 80px;
-  padding: 5px;
+  height: 36px;
+  width: 36px;
+  padding: 0;
   border: none;
-  background-color: white;
-  color: #007bff;
-  border: 2px solid #007bff;
-  font-size: 15px;
-  font-family: "微软雅黑", sans-serif;
-  border-radius: 5px;
+  background-color: #97A5C0;
+  display: flex; /* 使用flex布局使图标居中 */
+  justify-content: center; /* 水平居中 */
+  align-items: center;
+  border-radius: 3px;
   opacity: 0.8; /*不透明度*/
+}
+
+.on-button {
+  pointer-events: auto;
+  cursor: pointer; /*鼠标悬停为手形*/
+  height: 36px;
+  width: 36px;
+  padding: 0;
+  border: none;
+  background-color: #B0C3DA;
+  display: flex; /* 使用flex布局使图标居中 */
+  justify-content: center; /* 水平居中 */
+  align-items: center;
+  border-radius: 3px;
+  opacity: 0.8; /*不透明度*/
+}
+
+.fas {
+  color: #eff0fd;
+  font-size: 16px;
+}
+
+.fa-regular {
+  color: #eff0fd;
+  font-size: 18px;
+}
+
+.fa-solid {
+  color: #eff0fd;
+  font-size: 18px;
 }
 
 .chartimg {
@@ -1634,6 +2720,33 @@ html, body {
   position: absolute;
   left: 5%;
   top: 5%;
+}
+
+.station-id-tooltip {
+  text-align: center;
+  border: none;
+  background-color: transparent;
+  color: grey;
+  font-size: 10px;
+  font-family: 'Microsoft YaHei', sans-serif; /* 微软雅黑 */
+  font-weight: bold; /* 加粗 */
+  background: none;
+  border: none;
+}
+
+.logo {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.moveup-enter-active, .moveup-leave-active {
+  transition: all 0.5s ease-in-out;
+}
+
+.moveup-enter-from,
+.moveup-leave-to {
+  transform: translateY(95vh);
 }
 
 </style>
