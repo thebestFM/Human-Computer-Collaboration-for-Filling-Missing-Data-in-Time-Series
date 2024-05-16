@@ -1,13 +1,13 @@
 # AirPainter
 
-### 快速开始
+## Quick Start
 ```
 git clone https://gitee.com/fm_xym/air-painter.git
 npm install
 npm run serve
 ```
 
-### 依赖版本
+## Dependencies
 ```
 - Vue.js 3.2.13
 - Leaflet 1.9.4
@@ -18,13 +18,13 @@ npm run serve
 - IndexedDB (IDB) 8.0.0
 ```
 
-### 一些说明
+## Notes
 ```
-几个文件的内容：
-ground: ground truth, 原始数据集
-missing: 通过一定的规则（主要是参考下个月为空）去掉ground的部分数据得到，包含训练集
- - 训练集: missing里的1,2,4,5,7,8,10,11月的有效的数据点
- - 测试集: missing里的3,6,9,12月的、为空的、且ground里有效的数据点
-predict: 使用模型将missing的所有空数据点填满得到，包含测试集
-MS: missing and saved, 在missing的基础上加上保存的数据点（3,6,9,12月的扩充训练集）
+Content of several files:
+ground: ground truth, original dataset
+missing: derived by removing some data from ground according to certain rules (mainly referring to the next month being empty), includes training set
+ - Training set: valid data points from January, February, April, May, July, August, October, and November in missing
+ - Test set: empty data points from March, June, September, and December in missing that are valid in ground
+predict: filled in all empty data points in missing using the model, includes test set
+MS: missing and saved, based on missing with added saved data points (expanded training set for March, June, September, and December)
 ```
